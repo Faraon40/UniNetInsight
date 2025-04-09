@@ -296,8 +296,9 @@ def export_csv(hosts_metadata):
 
 def main():
 
-    # subnet = str(input("Enter the subnet with mask: "))
-    devices = scan_subnet("192.168.100.0/24")
+    subnet = str(input("Enter the subnet with mask: "))
+
+    devices = scan_subnet(subnet)
     print(json.dumps(devices, indent=4))
 
 
@@ -311,9 +312,8 @@ def main():
         device = create_address(device, tenant["id"])
         update_device(device)
 
-
-    # print(json.dumps(devices, indent=4))
     export_csv(devices)
 
 if __name__ == "__main__":
     main()
+
