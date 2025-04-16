@@ -1,4 +1,4 @@
-from config import NETBOX_URL as netbox_url, API_TOKEN_USER as api_token
+from config import NETBOX_URL as netbox_url, API_TOKEN_ADMIN as api_token
 import requests
 import json
 import subprocess
