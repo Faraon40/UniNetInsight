@@ -50,6 +50,7 @@ def execute_nmap(subnet):
 
     current_os = platform.system()
 
+    command = ["nmap", "-sn", "-oX", "-", subnet]
     if current_os == "Linux":
         command.insert(0, "sudo")
     elif current_os == "Windows":
@@ -61,7 +62,35 @@ def execute_nmap(subnet):
     print(f"Scanning subnet {subnet} ...")
 
     result = subprocess.run(command, capture_output=True, text=True)
-    return result.stdout
+    return result
+
+
+def parse_nmap_xml(xml_data):
+    hosts = []
+    print(xml_data)
+    root = etree.fromstring(xml_data.stdout)
+
+    for host in root.findall("host"):
+        status = host.find("status").attrib.get("state", "unknown")
+        ip = ""
+        mac = ""
+        vendor = "Unspecified"
+
+        for addr in host.findall("address"):
+            if addr.attrib["addrtype"] == "ipv4":
+                ip = addr.attrib["addr"]
+            elif addr.attrib["addrtype"] == "mac":
+                mac = addr.attrib["addr"]
+                vendor = addr.attrib.get("vendor", "Unspecified")
+
+        hosts.append({
+            "ip_addr": ip,
+            "mac_addr": mac,
+            "manufacturer": vendor,
+            "status": "active" if status == "up" else "offline"
+        })
+
+    return hosts
 
 
 def main():
@@ -78,21 +107,8 @@ def main():
         args.address = input("Enter subnet (CIDR notation, e.g. 192.168.1.0/24): ").strip()
 
 
-    result = execute_nmap(
-        subnet=args.address,
-        use_sudo=not args.no_sudo,
-        override_os=args.os,
-    )
-
-    # Output to file if requested
-    # if result and args.output:
-    #     try:
-    #         with open(args.output, "w") as f:
-    #             f.write(result.stdout)
-    #         print(f"Output saved to {args.output}")
-    #     except Exception as e:
-    #         print(f"Failed to write to output file: {e}")
-    #         sys.exit(1)
+    result = execute_nmap(subnet=args.address)
+    hosts = parse_nmap_xml(result)
 
 
 if __name__ == "__main__":
