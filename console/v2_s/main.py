@@ -15,7 +15,7 @@ import xml.etree.ElementTree as etree
 
 def load_config():
     """"""
-    with open('config.yml', 'r') as f:
+    with open("../../configs/config.yml", 'r') as f:
         config = yaml.safe_load(f)
     return {
         "api_token": os.getenv("API_TOKEN", config["api_token"]),
