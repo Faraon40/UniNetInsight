@@ -8,6 +8,13 @@ import csv
 import socket
 import sys
 
+
+headers = {
+    'Authorization': f'Token {api_token}',
+    'Content-Type': 'application/json',
+}
+
+
 def check_config():
     if not netbox_url:
         print("Missing NetBox url in config.py.")
@@ -15,12 +22,6 @@ def check_config():
     if not api_token:
         print("Missing NetBox api key in config.py.")
         sys.exit(1)
-
-
-headers = {
-    'Authorization': f'Token {api_token}',
-    'Content-Type': 'application/json',
-}
 
 
 def find_available_tenants():
@@ -45,12 +46,14 @@ def find_available_tenants():
         print(f"An error occurred: {e}")
     return sys.exit(1)
 
+
 def get_hostname(ip):
     try:
         hostname, _, _ = socket.gethostbyaddr(ip)
         return hostname
     except socket.herror:
         return None
+
 
 def scan_subnet(subnet):
     if platform.system() == "Linux":
@@ -104,13 +107,10 @@ def scan_subnet(subnet):
 
     return devices
 
-# Funkcia na ziskavanie host name, pre lepsiu evidenciu a rozoznanie pocitacov
-
-
 
 def create_device(device, tenant):
     name = device["hostname"]
-    if name == None:
+    if name is None:
         name = device["mac_addr"]
     # TODO
     payload = {
@@ -171,6 +171,7 @@ def create_interface(device):
     except requests.exceptions.RequestException as e:
         print(f"An error occurred: {e}")
     return exit(1)
+
 
 def create_address(device, tenant):
     payload = {
