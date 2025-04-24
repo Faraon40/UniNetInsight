@@ -2,12 +2,37 @@
 
 __author__ = "Antonio Kis"
 
-
+import json
 import subprocess
 import sys
 import platform
 import ipaddress
 import argparse
+import yaml
+import os
+import xml.etree.ElementTree as etree
+
+
+def load_config():
+    """"""
+    with open('config.yml', 'r') as f:
+        config = yaml.safe_load(f)
+    return {
+        "api_token": os.getenv("API_TOKEN", config["api_token"]),
+        "base_url": os.getenv("BASE_URL", config["base_url"])
+    }
+
+
+def validate_config(config):
+    required_keys = ["api_token", "base_url"]
+    missing = [key for key in required_keys if not config.get(key)]
+
+    if missing:
+        print("Configuration Error:")
+        for key in missing:
+            print(f"  - Missing '{key}' in config.yaml or environment variables.")
+        print("\nCannot proceed. Please set the required configuration values.")
+        sys.exit(1)  # Exit with a non-zero code to indicate error
 
 
 def validate_subnet(subnet):
@@ -19,24 +44,21 @@ def validate_subnet(subnet):
         sys.exit(1)
 
 
-def execute_nmap(subnet, use_sudo=True, override_os=None):
+def execute_nmap(subnet):
     """"""
     validate_subnet(subnet)
 
-    current_os = override_os if override_os else platform.system()
+    current_os = platform.system()
 
     if current_os == "Linux":
-        command = ["nmap", "-sn", subnet]
-        if use_sudo:
-            command.insert(0, "sudo")
+        command.insert(0, "sudo")
     elif current_os == "Windows":
-        command = ["nmap", "-sn", subnet]
+        pass
     else:
         print("Unsupported OS.")
         sys.exit(1)
 
-    print(f"Scanning subnet: {subnet}")
-    print(f"Command: {' '.join(command)}")
+    print(f"Scanning subnet {subnet} ...")
 
     result = subprocess.run(command, capture_output=True, text=True)
     return result.stdout
