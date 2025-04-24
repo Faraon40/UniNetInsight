@@ -66,6 +66,7 @@ def execute_nmap(subnet):
 
 
 def parse_nmap_xml(xml_data):
+    """"""
     hosts = []
     print(xml_data)
     root = etree.fromstring(xml_data.stdout)
@@ -98,14 +99,12 @@ def main():
     parser = argparse.ArgumentParser(description="Run Nmap ping scan on a given subnet.")
     parser.add_argument("-addr", "--address", help="Subnet in CIDR notation (e.g., 192.168.1.0/24)")
     parser.add_argument("-o", "--output", help="File to save the output (e.g., results.csv)")
-    parser.add_argument("--os", choices=["Linux", "Windows"], help="Manually specify OS (for testing)")
 
     args = parser.parse_args()
 
     # Prompt if address was not provided via CLI
     if not args.address:
         args.address = input("Enter subnet (CIDR notation, e.g. 192.168.1.0/24): ").strip()
-
 
     result = execute_nmap(subnet=args.address)
     hosts = parse_nmap_xml(result)
