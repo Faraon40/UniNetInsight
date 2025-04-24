@@ -1,4 +1,4 @@
-from config import NETBOX_URL as netbox_url, API_TOKEN_USER as api_token
+from config import NETBOX_URL as netbox_url, API_TOKEN_ADMIN as api_token
 import requests
 import json
 import subprocess
@@ -112,12 +112,12 @@ def create_device(device, tenant):
     name = device["hostname"]
     if name == None:
         name = device["mac_addr"]
-
+    # TODO
     payload = {
         "name": name,
-        "role": 17, # Ziskat predtym
-        "device_type": 9, # Ziskat predtym
-        "site": 6, # Ziskat predtym
+        "role": 3, # Ziskat predtym
+        "device_type": 1, # Ziskat predtym
+        "site": 1, # Ziskat predtym
         # "location": "", # Location, miestnost, napr: C603, ak neexistuje, vytvori sa v NetBoxe
         "status": device["status"], # Je iny status neaktivny pre ip addr a pre device
         "tenant": tenant # Zvoleny tenant pouzivatelom
