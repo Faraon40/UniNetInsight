@@ -102,13 +102,15 @@ def parse_nmap_xml(xml_data):
                 vendor = addr.attrib.get("vendor", "Unspecified")
 
         hosts.append({
+            "id": None,
+            "interface_id": None,
+            "ip_addr_id": None,
             "ip_addr": ip,
             "mac_addr": mac,
             "manufacturer": vendor,
             "status": "active" if status == "up" else "offline",
             "hostname": hostname,
         })
-
     return hosts
 
 
@@ -167,6 +169,47 @@ def display_tenant_options(config):
             sys.exit(1)
 
 
+def create_devices(hosts, tenant, config):
+    device_url = f"{config['base_url']}/api/dcim/devices/"
+
+    headers = {
+        "Authorization": f"Token {config['api_token']}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+    for host in hosts:
+        name = host.get("hostname") or host["mac_addr"]
+
+        payload = {
+            "name": name,
+            "device_role": 1,
+            "device_type": 1,
+            "site": 1,
+            "status": host["status"],
+            "tenant": tenant["id"]
+        }
+
+        try:
+            response = requests.post(device_url, json=payload, headers=headers, timeout=5)
+
+            if response.status_code == 201:
+                host["id"] = response.json().get("id", [])
+                print(f"Device '{name}' added (MAC: {host['mac_addr']}, ID: {host['id']}).")
+            else:
+                print(f"Failed to add device '{name}' (MAC: {host['mac_addr']}).")
+                print(f"Response [{response.status_code}]: {response.text}")
+
+        except requests.exceptions.ConnectionError:
+            print("Connection error: The server might be unreachable.")
+        except requests.exceptions.Timeout:
+            print("Timeout: Server took too long to respond.")
+        except requests.exceptions.RequestException as e:
+            print(f"Request error: {e}")
+
+    return hosts
+
+
 def main():
     """"""
     parser = argparse.ArgumentParser(description="Run Nmap ping scan on a given subnet.")
@@ -177,11 +220,11 @@ def main():
     config = validate_config()
 
     # Prompt if address was not provided via CLI
-    # if not args.address:
-    #     args.address = input("Enter subnet (CIDR notation, e.g. 192.168.1.0/24): ").strip()
+    if not args.address:
+        args.address = input("Enter subnet (CIDR notation, e.g. 192.168.1.0/24): ").strip()
 
-    # result = execute_nmap(subnet=args.address)
-    # hosts = parse_nmap_xml(result)
+    result = execute_nmap(subnet=args.address)
+    hosts = parse_nmap_xml(result)
 
     tenant = display_tenant_options(config)
 
