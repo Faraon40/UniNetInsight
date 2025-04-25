@@ -3,6 +3,9 @@
 __author__ = "Antonio Kis"
 
 import json
+from asyncio import timeout
+
+import requests
 import subprocess
 import sys
 import platform
@@ -10,13 +13,14 @@ import ipaddress
 import argparse
 import yaml
 import os
-import xml.etree.ElementTree as etree
+import xml.etree.ElementTree as ETree
 import socket
 
 
 def load_config():
     """"""
-    with open("../../configs/config.yml", 'r') as f:
+    config_path = "../../configs/config.yml"
+    with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     return {
         "api_token": os.getenv("API_TOKEN", config["api_token"]),
@@ -35,6 +39,7 @@ def validate_config():
             print(f"Missing '{key}' in config.yaml or environment variables.", file=sys.stderr)
         print("Cannot proceed. Please set the required configuration values.", file=sys.stderr)
         sys.exit(1)
+    return config
 
 
 def validate_subnet(subnet):
@@ -79,7 +84,7 @@ def get_hostname(ip):
 def parse_nmap_xml(xml_data):
     """"""
     hosts = []
-    root = etree.fromstring(xml_data.stdout)
+    root = ETree.fromstring(xml_data.stdout)
 
     for host in root.findall("host"):
         status = host.find("status").attrib.get("state", "unknown")
@@ -107,6 +112,61 @@ def parse_nmap_xml(xml_data):
     return hosts
 
 
+def get_tenants(config):
+    tenant_url = f"{config['base_url']}/api/tenancy/tenants/"
+
+    headers = {
+        "Authorization": f"Token {config['api_token']}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+    try:
+        response = requests.get(tenant_url, headers=headers, timeout=5)
+
+        if response.status_code == 200:
+            tenant_data = response.json()
+            if "detail" in tenant_data and tenant_data["detail"] == "Invalid token.":
+                print("Error: Invalid token. Please check your authentication.")
+            elif "count" in tenant_data and tenant_data["count"] == 0:
+                print("Permission denied. Contact administrator.")
+            else:
+                return tenant_data
+    except requests.exceptions.ConnectionError:
+        print("Connection error: The server might be down.")
+    except requests.exceptions.Timeout:
+        print("Connection timeout: The server took too long to respond.")
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred: {e}")
+    return sys.exit(1)
+
+
+def display_tenant_options(config):
+    tenant_data = get_tenants(config)
+    tenants = tenant_data.get("results", [])
+    if not tenants:
+        print("Permission denied. Contact administrator.")
+        return sys.exit(1)
+
+    print("Available tenants:")
+    for idx, tenant in enumerate(tenants):
+        print(f"{idx}: {tenant['name'] - {tenant['description']}}")
+
+    while True:
+        try:
+            choice = int(input("Enter a number corresponding to your tenant: "))
+            if 0 <= choice < len(tenants):
+                selected_option = tenants[choice]
+                return selected_option
+            else:
+                print("Invalid choice. Please enter a number within the range.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+        except KeyboardInterrupt:
+            print("\nOperation terminated by the user.")
+            sys.exit(1)
+
+
 def main():
     """"""
     parser = argparse.ArgumentParser(description="Run Nmap ping scan on a given subnet.")
@@ -114,14 +174,16 @@ def main():
     parser.add_argument("-o", "--output", help="File to save the output (e.g., results.csv)")
 
     args = parser.parse_args()
-    validate_config()
+    config = validate_config()
 
     # Prompt if address was not provided via CLI
-    if not args.address:
-        args.address = input("Enter subnet (CIDR notation, e.g. 192.168.1.0/24): ").strip()
+    # if not args.address:
+    #     args.address = input("Enter subnet (CIDR notation, e.g. 192.168.1.0/24): ").strip()
 
-    result = execute_nmap(subnet=args.address)
-    hosts = parse_nmap_xml(result)
+    # result = execute_nmap(subnet=args.address)
+    # hosts = parse_nmap_xml(result)
+
+    tenant = display_tenant_options(config)
 
 
 if __name__ == "__main__":
