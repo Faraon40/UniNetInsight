@@ -115,12 +115,12 @@ def create_device(device, tenant):
     # TODO
     payload = {
         "name": name,
-        "role": 3, # Ziskat predtym
-        "device_type": 1, # Ziskat predtym
-        "site": 1, # Ziskat predtym
+        "role": 3,  # Ziskat predtym
+        "device_type": 1,  # Ziskat predtym
+        "site": 1,  # Ziskat predtym
         # "location": "", # Location, miestnost, napr: C603, ak neexistuje, vytvori sa v NetBoxe
-        "status": device["status"], # Je iny status neaktivny pre ip addr a pre device
-        "tenant": tenant # Zvoleny tenant pouzivatelom
+        "status": device["status"],  # Je iny status neaktivny pre ip addr a pre device
+        "tenant": tenant  # Zvoleny tenant pouzivatelom
     }
 
     device_ulr = f"{netbox_url}/api/dcim/devices/"
@@ -150,7 +150,7 @@ def create_interface(device):
     payload = {
         "device": device["id"],
         "name": "eth0",
-        "type": "other", # Manualne nastavit
+        "type": "other",  # Manualne nastavit
         "mac_address": device["mac_addr"],
     }
 
@@ -228,24 +228,24 @@ def update_device(device):
 
 
 def get_device(device):
-        device_url = f"{netbox_url}/api/dcim/devices/{device['id']}/"
-        try:
-            response = requests.get(device_url, headers=headers, timeout=5)
-            if response.status_code == 200:
-                device_data = response.json()
-                print(f"Successfully retrieved device with ID {device['id']}:")
-                print(device_data)
-                return device_data
-            else:
-                print(f"Failed to retrieve device with ID {device['id']}. {response.status_code} {response.text}")
-                return None
-        except requests.exceptions.ConnectionError:
-            print("Connection error: The server might be down.")
-        except requests.exceptions.Timeout:
-            print("Connection timeout: The server took too long to respond.")
-        except requests.exceptions.RequestException as e:
-            print(f"An error occurred: {e}")
-        return exit(1)
+    device_url = f"{netbox_url}/api/dcim/devices/{device['id']}/"
+    try:
+        response = requests.get(device_url, headers=headers, timeout=5)
+        if response.status_code == 200:
+            device_data = response.json()
+            print(f"Successfully retrieved device with ID {device['id']}:")
+            print(device_data)
+            return device_data
+        else:
+            print(f"Failed to retrieve device with ID {device['id']}. {response.status_code} {response.text}")
+            return None
+    except requests.exceptions.ConnectionError:
+        print("Connection error: The server might be down.")
+    except requests.exceptions.Timeout:
+        print("Connection timeout: The server took too long to respond.")
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred: {e}")
+    return exit(1)
 
 
 def display_tenant_options(json_data):
@@ -295,13 +295,13 @@ def export_csv(hosts_metadata):
     print(f"File '{output}' was successfully created.")
     return output
 
+
 def main():
 
     subnet = str(input("Enter the subnet with mask: "))
 
     devices = scan_subnet(subnet)
     print(json.dumps(devices, indent=4))
-
 
     check_config()
     tenants = find_available_tenants()
@@ -315,6 +315,6 @@ def main():
 
     export_csv(devices)
 
+
 if __name__ == "__main__":
     main()
-
