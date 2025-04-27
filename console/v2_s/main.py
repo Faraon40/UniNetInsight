@@ -124,7 +124,11 @@ def get_tenants(config):
     }
 
     try:
-        response = requests.get(tenant_url, headers=headers, timeout=5)
+        response = requests.get(
+            url=tenant_url,
+            headers=headers,
+            timeout=5
+        )
 
         if response.status_code == 200:
             tenant_data = response.json()
@@ -191,21 +195,87 @@ def create_devices(hosts, tenant, config):
         }
 
         try:
-            response = requests.post(device_url, json=payload, headers=headers, timeout=5)
+            response = requests.post(
+                url=device_url,
+                json=payload,
+                headers=headers,
+                timeout=5
+            )
 
             if response.status_code == 201:
                 host["id"] = response.json().get("id", [])
                 print(f"Device '{name}' added (MAC: {host['mac_addr']}, ID: {host['id']}).")
             else:
                 print(f"Failed to add device '{name}' (MAC: {host['mac_addr']}).")
-                print(f"Response [{response.status_code}]: {response.text}")
+                print(f"{response.status_code} {response.text}")
 
         except requests.exceptions.ConnectionError:
             print("Connection error: The server might be unreachable.")
+            break
         except requests.exceptions.Timeout:
             print("Timeout: Server took too long to respond.")
+            break
         except requests.exceptions.RequestException as e:
             print(f"Request error: {e}")
+            break
+
+    return hosts
+
+
+def create_interfaces(hosts, tenant, config):
+    interface_url = f"{config['base_url']}/api/dcim/interfaces/"
+
+    headers = {
+        "Authorization": f"Token {config['api_token']}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+    for host in hosts:
+        payload = {
+            "device": host["id"],
+            "name": "eth0",
+            "type": "other",  # Manualne nastavit
+            "mac_address": host["mac_addr"],
+        }
+
+        try:
+            response = requests.post(
+                url=interface_url,
+                json=payload,
+                headers=headers,
+                timeout=5
+            )
+
+            if response.status_code == 201:
+                host["interface_id"] = response.json().get("id", [])
+                print(f"Interface of a Device {host['id']} with "
+                      f"{host['interface_id']} added successfully.")
+            else:
+                print(f"Failed to add Interface of a Device {host['hostname']}")
+                print(f"{response.status_code} {response.text}")
+
+        except requests.exceptions.ConnectionError:
+            print("Connection error: The server might be unreachable.")
+            break
+        except requests.exceptions.Timeout:
+            print("Timeout: Server took too long to respond.")
+            break
+        except requests.exceptions.RequestException as e:
+            print(f"Request error: {e}")
+            break
+
+    return hosts
+
+
+def create_addresses(hosts, tenant, config):
+    ip_address_url = f"{config['base_url']}/api/ipam/ip-addresses/"
+
+    headers = {
+        "Authorization": f"Token {config['api_token']}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
 
     return hosts
 
@@ -227,6 +297,9 @@ def main():
     hosts = parse_nmap_xml(result)
 
     tenant = display_tenant_options(config)
+    hosts = create_devices(hosts, tenant, config)
+    hosts = create_interfaces(hosts, tenant, config)
+    hosts = create_addresses(hosts, tenant, config)
 
 
 if __name__ == "__main__":
