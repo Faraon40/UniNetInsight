@@ -313,6 +313,44 @@ def create_addresses(hosts, tenant, config):
     return hosts
 
 
+def update_devices(hosts, config):
+    headers = {
+        "Authorization": f"Token {config['api_token']}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+    for host in hosts:
+        payload = {
+            "primary_ip4": host["ip_addr_id"]
+        }
+
+        device_url = f"{config['base_url']}/api/dcim/devices/{host['id']}"
+
+        try:
+            response = requests.patch(
+                url=device_url,
+                json=payload,
+                headers=headers,
+                timeout=5
+            )
+            if response.status_code == 200:
+                print(f"Device with ID {host['id']} has been updated successfully with primary IP {host['ip_addr']}.")
+            else:
+                print(f"Failed to update device with ID {host['id']}.")
+                print(f"{response.status_code} {response.text}")
+
+        except requests.exceptions.ConnectionError:
+            print("Connection error: The server might be down.")
+            break
+        except requests.exceptions.Timeout:
+            print("Connection timeout: The server took too long to respond.")
+            break
+        except requests.exceptions.RequestException as e:
+            print(f"An error occurred: {e}")
+            break
+
+
 def main():
     """"""
     parser = argparse.ArgumentParser(description="Run Nmap ping scan on a given subnet.")
@@ -335,6 +373,7 @@ def main():
     hosts = create_devices(hosts, tenant, config)
     hosts = create_interfaces(hosts, config)
     hosts = create_addresses(hosts, tenant, config)
+    update_devices(hosts, config)
 
 
 if __name__ == "__main__":
