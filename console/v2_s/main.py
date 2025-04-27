@@ -3,8 +3,6 @@
 __author__ = "Antonio Kis"
 
 import json
-from asyncio import timeout
-
 import requests
 import subprocess
 import sys
@@ -156,7 +154,7 @@ def display_tenant_options(config):
 
     print("Available tenants:")
     for idx, tenant in enumerate(tenants):
-        print(f"{idx}: {tenant['name'] - {tenant['description']}}")
+        print(f"{idx}: {tenant['name']} - {tenant['description']}")
 
     while True:
         try:
@@ -187,9 +185,9 @@ def create_devices(hosts, tenant, config):
 
         payload = {
             "name": name,
-            "device_role": 1,
-            "device_type": 1,
-            "site": 1,
+            "role": 17,  # school 1, home 17
+            "device_type": 9,  # school 1, home 9
+            "site": 4,  # school 1, home 4-9
             "status": host["status"],
             "tenant": tenant["id"]
         }
@@ -216,13 +214,13 @@ def create_devices(hosts, tenant, config):
             print("Timeout: Server took too long to respond.")
             break
         except requests.exceptions.RequestException as e:
-            print(f"Request error: {e}")
+            print(f"An error occurred: {e}")
             break
 
     return hosts
 
 
-def create_interfaces(hosts, tenant, config):
+def create_interfaces(hosts, config):
     interface_url = f"{config['base_url']}/api/dcim/interfaces/"
 
     headers = {
@@ -235,7 +233,7 @@ def create_interfaces(hosts, tenant, config):
         payload = {
             "device": host["id"],
             "name": "eth0",
-            "type": "other",  # Manualne nastavit
+            "type": "other",
             "mac_address": host["mac_addr"],
         }
 
@@ -262,7 +260,7 @@ def create_interfaces(hosts, tenant, config):
             print("Timeout: Server took too long to respond.")
             break
         except requests.exceptions.RequestException as e:
-            print(f"Request error: {e}")
+            print(f"An error occurred: {e}")
             break
 
     return hosts
@@ -276,6 +274,41 @@ def create_addresses(hosts, tenant, config):
         "Content-Type": "application/json",
         "Accept": "application/json"
     }
+
+    for host in hosts:
+        payload = {
+            "address": f"{host['ip_addr']}/24",
+            "status": "active",
+            "tenant": tenant["id"],
+            "description": host["mac_addr"],
+            "assigned_object_type": "dcim.interface",
+            "assigned_object_id": host["interface_id"],
+        }
+
+        try:
+            response = requests.post(
+                url=ip_address_url,
+                json=payload,
+                headers=headers,
+                timeout=5
+            )
+
+            if response.status_code == 201:
+                host["ip_addr_id"] = response.json().get("id", [])
+                print(f"IP Address {host['ip_addr']} has been added successfully.")
+            else:
+                print(f"Failed to add IP Address {host['ip_addr']}.")
+                print(f"{response.status_code} {response.text}")
+
+        except requests.exceptions.ConnectionError:
+            print("Connection error: The server might be down.")
+            break
+        except requests.exceptions.Timeout:
+            print("Connection timeout: The server took too long to respond.")
+            break
+        except requests.exceptions.RequestException as e:
+            print(f"An error occurred: {e}")
+            break
 
     return hosts
 
@@ -296,9 +329,11 @@ def main():
     result = execute_nmap(subnet=args.address)
     hosts = parse_nmap_xml(result)
 
+    print(json.dumps(hosts, indent=4))
+
     tenant = display_tenant_options(config)
     hosts = create_devices(hosts, tenant, config)
-    hosts = create_interfaces(hosts, tenant, config)
+    hosts = create_interfaces(hosts, config)
     hosts = create_addresses(hosts, tenant, config)
 
 
