@@ -34,8 +34,10 @@ def validate_config():
     if missing:
         print("Configuration Error:", end=" ", file=sys.stderr)
         for key in missing:
-            print(f"Missing '{key}' in config.yaml or environment variables.", file=sys.stderr)
-        print("Cannot proceed. Please set the required configuration values.", file=sys.stderr)
+            print(f"Missing '{key}' in config.yaml or environment variables.",
+                  file=sys.stderr)
+        print("Cannot proceed. Please set the required configuration values.",
+              file=sys.stderr)
         sys.exit(1)
     return config
 
@@ -45,7 +47,8 @@ def validate_subnet(subnet):
     try:
         ipaddress.IPv4Network(subnet, strict=False)
     except ValueError:
-        print(f"Error: The provided subnet '{subnet}' is invalid or missing a subnet mask (e.g., /24).", file=sys.stderr)
+        print(f"Error: The provided subnet '{subnet}' is invalid or missing"
+              f" a subnet mask (e.g., /24).", file=sys.stderr)
         sys.exit(1)
 
 
@@ -113,6 +116,7 @@ def parse_nmap_xml(xml_data):
 
 
 def get_tenants(config):
+    """"""
     tenant_url = f"{config['base_url']}/api/tenancy/tenants/"
 
     headers = {
@@ -130,7 +134,8 @@ def get_tenants(config):
 
         if response.status_code == 200:
             tenant_data = response.json()
-            if "detail" in tenant_data and tenant_data["detail"] == "Invalid token.":
+            if ("detail" in tenant_data
+                    and tenant_data["detail"] == "Invalid token."):
                 print("Error: Invalid token. Please check your authentication.")
             elif "count" in tenant_data and tenant_data["count"] == 0:
                 print("Permission denied. Contact administrator.")
@@ -172,6 +177,7 @@ def display_tenant_options(config):
 
 
 def create_devices(hosts, tenant, config):
+    """"""
     device_url = f"{config['base_url']}/api/dcim/devices/"
 
     headers = {
@@ -202,9 +208,11 @@ def create_devices(hosts, tenant, config):
 
             if response.status_code == 201:
                 host["id"] = response.json().get("id", [])
-                print(f"Device '{name}' added (MAC: {host['mac_addr']}, ID: {host['id']}).")
+                print(f"Device '{name}' added (MAC: {host['mac_addr']}, ID:"
+                      f" {host['id']}).")
             else:
-                print(f"Failed to add device '{name}' (MAC: {host['mac_addr']}).")
+                print(f"Failed to add device '{name}'"
+                      f" (MAC: {host['mac_addr']}).")
                 print(f"{response.status_code} {response.text}")
 
         except requests.exceptions.ConnectionError:
@@ -221,6 +229,7 @@ def create_devices(hosts, tenant, config):
 
 
 def create_interfaces(hosts, config):
+    """"""
     interface_url = f"{config['base_url']}/api/dcim/interfaces/"
 
     headers = {
@@ -267,6 +276,7 @@ def create_interfaces(hosts, config):
 
 
 def create_addresses(hosts, tenant, config):
+    """"""
     ip_address_url = f"{config['base_url']}/api/ipam/ip-addresses/"
 
     headers = {
@@ -295,7 +305,8 @@ def create_addresses(hosts, tenant, config):
 
             if response.status_code == 201:
                 host["ip_addr_id"] = response.json().get("id", [])
-                print(f"IP Address {host['ip_addr']} has been added successfully.")
+                print(f"IP Address {host['ip_addr']} has been added"
+                      f" successfully.")
             else:
                 print(f"Failed to add IP Address {host['ip_addr']}.")
                 print(f"{response.status_code} {response.text}")
@@ -314,6 +325,7 @@ def create_addresses(hosts, tenant, config):
 
 
 def update_devices(hosts, config):
+    """"""
     headers = {
         "Authorization": f"Token {config['api_token']}",
         "Content-Type": "application/json",
@@ -335,7 +347,8 @@ def update_devices(hosts, config):
                 timeout=5
             )
             if response.status_code == 200:
-                print(f"Device with ID {host['id']} has been updated successfully with primary IP {host['ip_addr']}.")
+                print(f"Device with ID {host['id']} has been updated"
+                      f" successfully with primary IP {host['ip_addr']}.")
             else:
                 print(f"Failed to update device with ID {host['id']}.")
                 print(f"{response.status_code} {response.text}")
@@ -353,16 +366,20 @@ def update_devices(hosts, config):
 
 def main():
     """"""
-    parser = argparse.ArgumentParser(description="Run Nmap ping scan on a given subnet.")
-    parser.add_argument("-addr", "--address", help="Subnet in CIDR notation (e.g., 192.168.1.0/24)")
-    parser.add_argument("-o", "--output", help="File to save the output (e.g., results.csv)")
+    parser = argparse.ArgumentParser(description="Run Nmap ping scan on a"
+                                                 " given subnet.")
+    parser.add_argument("-addr", "--address",
+                        help="Subnet in CIDR notation (e.g., 192.168.1.0/24)")
+    parser.add_argument("-o", "--output",
+                        help="File to save the output (e.g., results.csv)")
 
     args = parser.parse_args()
     config = validate_config()
 
     # Prompt if address was not provided via CLI
     if not args.address:
-        args.address = input("Enter subnet (CIDR notation, e.g. 192.168.1.0/24): ").strip()
+        args.address = input("Enter subnet (CIDR notation, "
+                             "e.g. 192.168.1.0/24): ").strip()
 
     result = execute_nmap(subnet=args.address)
     hosts = parse_nmap_xml(result)
