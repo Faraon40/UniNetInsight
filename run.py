@@ -17,7 +17,11 @@ import socket
 
 def load_config():
     """"""
-    config_path = "../../configs/config.yml"
+    config_path = "configs/config.yml"
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"The configuration file '{config_path}' "
+                                f"does not exist.")
+
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     return {
