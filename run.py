@@ -340,9 +340,7 @@ def update_devices(hosts, config):
         payload = {
             "primary_ip4": host["ip_addr_id"]
         }
-
-        device_url = f"{config['base_url']}/api/dcim/devices/{host['id']}"
-
+        device_url = f"{config['base_url']}/api/dcim/devices/{host['id']}/"
         try:
             response = requests.patch(
                 url=device_url,
