@@ -24,6 +24,7 @@ def load_config():
 
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
+
     return {
         "api_token": os.getenv("API_TOKEN", config["api_token"]),
         "base_url": os.getenv("BASE_URL", config["base_url"])
@@ -31,6 +32,7 @@ def load_config():
 
 
 def validate_config():
+    """"""
     required_keys = ["api_token", "base_url"]
     config = load_config()
     missing = [key for key in required_keys if not config.get(key)]
@@ -86,7 +88,7 @@ def get_hostname(ip):
         return None
 
 
-def parse_nmap_xml(xml_data):
+def parse_nmap_xml(xml_data, default_vendor="Unspecified"):
     """"""
     hosts = []
     root = ETree.fromstring(xml_data.stdout)
@@ -95,7 +97,7 @@ def parse_nmap_xml(xml_data):
         status = host.find("status").attrib.get("state", "unknown")
         ip = ""
         mac = ""
-        vendor = "Unspecified"
+        vendor = default_vendor
         hostname = ""
 
         for addr in host.findall("address"):
@@ -104,7 +106,7 @@ def parse_nmap_xml(xml_data):
                 hostname = get_hostname(ip)
             elif addr.attrib["addrtype"] == "mac":
                 mac = addr.attrib["addr"]
-                vendor = addr.attrib.get("vendor", "Unspecified")
+                vendor = addr.attrib.get("vendor", default_vendor)
 
         hosts.append({
             "id": None,
@@ -116,6 +118,7 @@ def parse_nmap_xml(xml_data):
             "status": "active" if status == "up" else "offline",
             "hostname": hostname,
         })
+
     return hosts
 
 
@@ -155,6 +158,7 @@ def get_tenants(config):
 
 
 def display_tenant_options(config):
+    """"""
     tenant_data = get_tenants(config)
     tenants = tenant_data.get("results", [])
     if not tenants:
@@ -190,6 +194,9 @@ def create_devices(hosts, tenant, config):
         "Accept": "application/json"
     }
 
+    # Bulc role
+    # Bulc device_type
+    # Bulc site
     for host in hosts:
         name = host.get("hostname") or host["mac_addr"]
 
@@ -335,7 +342,6 @@ def update_devices(hosts, config):
         "Content-Type": "application/json",
         "Accept": "application/json"
     }
-
     for host in hosts:
         payload = {
             "primary_ip4": host["ip_addr_id"]
@@ -381,7 +387,6 @@ def get_manufacturers(config):
             headers=headers,
             timeout=5
         )
-
         if response.status_code == 200:
             manufacturer_data = response.json()
             return manufacturer_data
@@ -395,7 +400,7 @@ def get_manufacturers(config):
     return sys.exit(1)
 
 
-def create_manufacturer(hosts, config):
+def create_manufacturers(hosts, config):
     """"""
     manufacturer_url = f"{config['base_url']}/api/dcim/manufacturers/"
 
@@ -462,8 +467,8 @@ def main():
     hosts = parse_nmap_xml(result)
 
     print(json.dumps(hosts, indent=4))
-
     tenant = display_tenant_options(config)
+    create_manufacturers(hosts, config)
     hosts = create_devices(hosts, tenant, config)
     hosts = create_interfaces(hosts, config)
     hosts = create_addresses(hosts, tenant, config)
