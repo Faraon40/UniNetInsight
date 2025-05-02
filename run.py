@@ -413,7 +413,8 @@ def create_manufacturers(hosts, config):
     new_manufacturers = set(host["manufacturer"] for host in hosts)
 
     manufacturers_data = get_manufacturers(config)
-    existing_manufacturers = {manufacturer["name"].lower() for manufacturer in manufacturers_data.get("results", [])}
+    existing_manufacturers = {manufacturer["name"].lower() for manufacturer in
+                              manufacturers_data.get("results", [])}
 
     for manufacturer in new_manufacturers:
         if manufacturer.lower() in existing_manufacturers:
@@ -431,9 +432,8 @@ def create_manufacturers(hosts, config):
                 timeout=5
             )
             if response.status_code == 201:
-                print(f"Manufacturer '{manufacturer}' was successfully created.")
-            # else:
-                # print(f"Failed to create manufacturer '{manufacturer}'. Status code: {response.status_code}")
+                print(f"Manufacturer '{manufacturer}' was successfully"
+                      f" created.")
 
         except requests.exceptions.ConnectionError:
             print("Connection error: The server might be down.")
