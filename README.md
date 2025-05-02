@@ -54,12 +54,15 @@ about the devices present in the network.
 To properly install NetBox we recommend to follow [NetBox Installation Guide](https://netboxlabs.com/docs/netbox/en/stable/installation/3-netbox/).
 This guide is enough to run NetBox locally on your machine and be able to run UniNetIsight locally.
 
-1. Download source code from [here]().
+1. Download source code from [here](https://github.com/Faraon40/UniNetInsight).
 2. Inside the configs/ directory, create a file named `config.yml` with the following contents:
+
 
 
     api_token: 1234567890abcdefg
     base_url: http://localhost:8000
+
+
 
 3. Generate the API token in NetBox
 - Log in to your NetBox instance as a Super Admin.
