@@ -368,6 +368,81 @@ def update_devices(hosts, config):
             break
 
 
+def get_manufacturers(config):
+    manufacturer_url = f"{config['base_url']}/api/dcim/manufacturers/"
+
+    headers = {
+        "Authorization": f"Token {config['api_token']}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+    try:
+        response = requests.get(
+            url=manufacturer_url,
+            headers=headers,
+            timeout=5
+        )
+
+        if response.status_code == 200:
+            manufacturer_data = response.json()
+            return manufacturer_data
+
+    except requests.exceptions.ConnectionError:
+        print("Connection error: The server might be down.")
+    except requests.exceptions.Timeout:
+        print("Connection timeout: The server took too long to respond.")
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred: {e}")
+    return sys.exit(1)
+
+
+def create_manufacturer(hosts, config):
+    """"""
+    manufacturer_url = f"{config['base_url']}/api/dcim/manufacturers/"
+
+    headers = {
+        "Authorization": f"Token {config['api_token']}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+    new_manufacturers = set(host["manufacturer"] for host in hosts)
+
+    manufacturers_data = get_manufacturers(config)
+    existing_manufacturers = {manufacturer["name"].lower() for manufacturer in manufacturers_data.get("results", [])}
+
+    for manufacturer in new_manufacturers:
+        if manufacturer.lower() in existing_manufacturers:
+            continue
+        payload = {
+            "name": manufacturer,
+            "slug": manufacturer.lower().replace(" ", "-")
+        }
+
+        try:
+            response = requests.post(
+                url=manufacturer_url,
+                json=payload,
+                headers=headers,
+                timeout=5
+            )
+            if response.status_code == 201:
+                print(f"Manufacturer '{manufacturer}' was successfully created.")
+            # else:
+                # print(f"Failed to create manufacturer '{manufacturer}'. Status code: {response.status_code}")
+
+        except requests.exceptions.ConnectionError:
+            print("Connection error: The server might be down.")
+            break
+        except requests.exceptions.Timeout:
+            print("Connection timeout: The server took too long to respond.")
+            break
+        except requests.exceptions.RequestException as e:
+            print(f"An error occurred: {e}")
+            break
+
+
 def main():
     """"""
     parser = argparse.ArgumentParser(description="Run Nmap ping scan on a"
