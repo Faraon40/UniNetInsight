@@ -15,6 +15,39 @@ import xml.etree.ElementTree as ETree
 import socket
 
 
+def post_to(url, payload, config, success_msg="", failure_msg=""):
+    headers = {
+        "Authorization": f"Token {config['api_token']}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+    try:
+        response = requests.post(
+            url=url,
+            json=payload,
+            headers=headers,
+            timeout=15
+        )
+
+        if response.status_code == 201:
+            if success_msg:
+                print(success_msg)
+            return response.json()
+        else:
+            print(failure_msg)
+            print(f"{response.status_code} {response.text}")
+
+    except requests.exceptions.ConnectionError:
+        print("Connection error: The server might be unreachable.")
+    except requests.exceptions.Timeout:
+        print("Timeout: Server took too long to respond.")
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred: {e}")
+
+    return None
+
+
 def load_config():
     """"""
     config_path = "configs/config.yml"
@@ -136,7 +169,7 @@ def get_tenants(config):
         response = requests.get(
             url=tenant_url,
             headers=headers,
-            timeout=5
+            timeout=15
         )
 
         if response.status_code == 200:
@@ -188,12 +221,6 @@ def create_devices(hosts, tenant, config):
     """"""
     device_url = f"{config['base_url']}/api/dcim/devices/"
 
-    headers = {
-        "Authorization": f"Token {config['api_token']}",
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-    }
-
     # Bulc role
     # Bulc device_type
     # Bulc site
@@ -209,32 +236,12 @@ def create_devices(hosts, tenant, config):
             "tenant": tenant["id"]
         }
 
-        try:
-            response = requests.post(
-                url=device_url,
-                json=payload,
-                headers=headers,
-                timeout=5
-            )
+        result = post_to(url=device_url, payload=payload, config=config,
+                         success_msg=f"Device '{name}' added (MAC: {host['mac_addr']}).",
+                         failure_msg=f"Failed to add device '{name}' (MAC: {host['mac_addr']}).")
 
-            if response.status_code == 201:
-                host["id"] = response.json().get("id", [])
-                print(f"Device '{name}' added (MAC: {host['mac_addr']}, ID:"
-                      f" {host['id']}).")
-            else:
-                print(f"Failed to add device '{name}'"
-                      f" (MAC: {host['mac_addr']}).")
-                print(f"{response.status_code} {response.text}")
-
-        except requests.exceptions.ConnectionError:
-            print("Connection error: The server might be unreachable.")
-            break
-        except requests.exceptions.Timeout:
-            print("Timeout: Server took too long to respond.")
-            break
-        except requests.exceptions.RequestException as e:
-            print(f"An error occurred: {e}")
-            break
+        if result:
+            host["id"] = result.get("id")
 
     return hosts
 
@@ -242,12 +249,6 @@ def create_devices(hosts, tenant, config):
 def create_interfaces(hosts, config):
     """"""
     interface_url = f"{config['base_url']}/api/dcim/interfaces/"
-
-    headers = {
-        "Authorization": f"Token {config['api_token']}",
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-    }
 
     for host in hosts:
         payload = {
@@ -257,31 +258,12 @@ def create_interfaces(hosts, config):
             "mac_address": host["mac_addr"],
         }
 
-        try:
-            response = requests.post(
-                url=interface_url,
-                json=payload,
-                headers=headers,
-                timeout=5
-            )
+        result = post_to(url=interface_url, payload=payload, config=config,
+                         success_msg=f"Interface for Device {host['id']} added.",
+                         failure_msg=f"Failed to add interface for Device {host['hostname']}.")
 
-            if response.status_code == 201:
-                host["interface_id"] = response.json().get("id", [])
-                print(f"Interface of a Device {host['id']} with "
-                      f"{host['interface_id']} added successfully.")
-            else:
-                print(f"Failed to add Interface of a Device {host['hostname']}")
-                print(f"{response.status_code} {response.text}")
-
-        except requests.exceptions.ConnectionError:
-            print("Connection error: The server might be unreachable.")
-            break
-        except requests.exceptions.Timeout:
-            print("Timeout: Server took too long to respond.")
-            break
-        except requests.exceptions.RequestException as e:
-            print(f"An error occurred: {e}")
-            break
+        if result:
+            host["interface_id"] = result.get("id")
 
     return hosts
 
@@ -289,12 +271,6 @@ def create_interfaces(hosts, config):
 def create_addresses(hosts, tenant, config):
     """"""
     ip_address_url = f"{config['base_url']}/api/ipam/ip-addresses/"
-
-    headers = {
-        "Authorization": f"Token {config['api_token']}",
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-    }
 
     for host in hosts:
         payload = {
@@ -306,31 +282,12 @@ def create_addresses(hosts, tenant, config):
             "assigned_object_id": host["interface_id"],
         }
 
-        try:
-            response = requests.post(
-                url=ip_address_url,
-                json=payload,
-                headers=headers,
-                timeout=5
-            )
+        result = post_to(url=ip_address_url, payload=payload, config=config,
+                         success_msg=f"IP Address {host['ip_addr']} added.",
+                         failure_msg=f"Failed to add IP Address {host['ip_addr']}.")
 
-            if response.status_code == 201:
-                host["ip_addr_id"] = response.json().get("id", [])
-                print(f"IP Address {host['ip_addr']} has been added"
-                      f" successfully.")
-            else:
-                print(f"Failed to add IP Address {host['ip_addr']}.")
-                print(f"{response.status_code} {response.text}")
-
-        except requests.exceptions.ConnectionError:
-            print("Connection error: The server might be down.")
-            break
-        except requests.exceptions.Timeout:
-            print("Connection timeout: The server took too long to respond.")
-            break
-        except requests.exceptions.RequestException as e:
-            print(f"An error occurred: {e}")
-            break
+        if result:
+            host["ip_addr_id"] = result.get("id")
 
     return hosts
 
@@ -352,7 +309,7 @@ def update_devices(hosts, config):
                 url=device_url,
                 json=payload,
                 headers=headers,
-                timeout=5
+                timeout=15
             )
             if response.status_code == 200:
                 print(f"Device with ID {host['id']} has been updated"
@@ -385,7 +342,7 @@ def get_manufacturers(config):
         response = requests.get(
             url=manufacturer_url,
             headers=headers,
-            timeout=5
+            timeout=15
         )
         if response.status_code == 200:
             manufacturer_data = response.json()
@@ -429,7 +386,7 @@ def create_manufacturers(hosts, config):
                 url=manufacturer_url,
                 json=payload,
                 headers=headers,
-                timeout=5
+                timeout=15
             )
             if response.status_code == 201:
                 print(f"Manufacturer '{manufacturer}' was successfully"
