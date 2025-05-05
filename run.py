@@ -16,6 +16,7 @@ import socket
 
 
 def post_to(url, payload, config, success_msg="", failure_msg=""):
+    """"""
     headers = {
         "Authorization": f"Token {config['api_token']}",
         "Content-Type": "application/json",
@@ -176,7 +177,8 @@ def get_tenants(config):
             tenant_data = response.json()
             if ("detail" in tenant_data
                     and tenant_data["detail"] == "Invalid token."):
-                print("Error: Invalid token. Please check your authentication.")
+                print("Error: Invalid token. Please check your"
+                      " authentication.")
             elif "count" in tenant_data and tenant_data["count"] == 0:
                 print("Permission denied. Contact administrator.")
             else:
@@ -204,12 +206,14 @@ def display_tenant_options(config):
 
     while True:
         try:
-            choice = int(input("Enter a number corresponding to your tenant: "))
+            choice = int(input("Enter a number corresponding to"
+                               " your tenant: "))
             if 0 <= choice < len(tenants):
                 selected_option = tenants[choice]
                 return selected_option
             else:
-                print("Invalid choice. Please enter a number within the range.")
+                print("Invalid choice. Please enter a "
+                      "number within the range.")
         except ValueError:
             print("Invalid input. Please enter a number.")
         except KeyboardInterrupt:
@@ -217,6 +221,8 @@ def display_tenant_options(config):
             sys.exit(1)
 
 
+# TODO
+#   remove hardcoded ids
 def create_devices(hosts, tenant, config):
     """"""
     device_url = f"{config['base_url']}/api/dcim/devices/"
@@ -237,8 +243,10 @@ def create_devices(hosts, tenant, config):
         }
 
         result = post_to(url=device_url, payload=payload, config=config,
-                         success_msg=f"Device '{name}' added (MAC: {host['mac_addr']}).",
-                         failure_msg=f"Failed to add device '{name}' (MAC: {host['mac_addr']}).")
+                         success_msg=f"Device '{name}' added (MAC: "
+                                     f"{host['mac_addr']}).",
+                         failure_msg=f"Failed to add device '{name}' (MAC: "
+                                     f"{host['mac_addr']}).")
 
         if result:
             host["id"] = result.get("id")
@@ -259,8 +267,10 @@ def create_interfaces(hosts, config):
         }
 
         result = post_to(url=interface_url, payload=payload, config=config,
-                         success_msg=f"Interface for Device {host['id']} added.",
-                         failure_msg=f"Failed to add interface for Device {host['hostname']}.")
+                         success_msg=f"Interface for Device {host['id']}"
+                                     f" added.",
+                         failure_msg=f"Failed to add interface for Device "
+                                     f"{host['hostname']}.")
 
         if result:
             host["interface_id"] = result.get("id")
@@ -284,7 +294,8 @@ def create_addresses(hosts, tenant, config):
 
         result = post_to(url=ip_address_url, payload=payload, config=config,
                          success_msg=f"IP Address {host['ip_addr']} added.",
-                         failure_msg=f"Failed to add IP Address {host['ip_addr']}.")
+                         failure_msg=f"Failed to add IP Address"
+                                     f" {host['ip_addr']}.")
 
         if result:
             host["ip_addr_id"] = result.get("id")
