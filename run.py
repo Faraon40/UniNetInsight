@@ -175,10 +175,8 @@ def parse_nmap_xml(xml_data, default_vendor="Unspecified"):
     return hosts
 
 
-def get_tenants(config):
-    """"""
-    tenant_url = f"{config['base_url']}/api/tenancy/tenants/"
-
+def get_from(url, config):
+    """Fetch data from the given URL."""
     headers = {
         "Authorization": f"Token {config['api_token']}",
         "Content-Type": "application/json",
@@ -187,52 +185,49 @@ def get_tenants(config):
 
     try:
         response = requests.get(
-            url=tenant_url,
+            url=url,
             headers=headers,
             timeout=15
         )
 
         if response.status_code == 200:
-            tenant_data = response.json()
-            if ("detail" in tenant_data
-                    and tenant_data["detail"] == "Invalid token."):
-                print("Error: Invalid token. Please check your"
-                      " authentication.")
-            elif "count" in tenant_data and tenant_data["count"] == 0:
-                print("Permission denied. Contact administrator.")
-            else:
-                return tenant_data
+            return response.json()
+        else:
+            print(f"{response.status_code} {response.text}")
+            return None
     except requests.exceptions.ConnectionError:
         print("Connection error: The server might be down.")
     except requests.exceptions.Timeout:
         print("Connection timeout: The server took too long to respond.")
     except requests.exceptions.RequestException as e:
         print(f"An error occurred: {e}")
-    return sys.exit(1)
+    return None
 
 
-def display_tenant_options(config):
-    """"""
-    tenant_data = get_tenants(config)
-    tenants = tenant_data.get("results", [])
-    if not tenants:
-        print("Permission denied. Contact administrator.")
+def display_options(config, api_endpoint, name_field="option", description_field="description", label_name=None):
+    """General function to display options and return the selected option."""
+    url = f"{config['base_url']}{api_endpoint}"
+    data = get_from(url, config)
+
+    if not data or "results" not in data:
+        print("Permission denied or no data found. Contact administrator.")
         return sys.exit(1)
 
-    print("Available tenants:")
-    for idx, tenant in enumerate(tenants):
-        print(f"{idx}: {tenant['name']} - {tenant['description']}")
+    entity_name = label_name or os.path.basename(api_endpoint.strip("/"))
+    print(f"Available {entity_name}:")
+    for idx, item in enumerate(data["results"]):
+        name = item.get(name_field, "N/A")
+        description = item.get(description_field)
+        print(f"{idx}: {name}" + (f" - {description}" if description else ""))
 
     while True:
         try:
-            choice = int(input("Enter a number corresponding to"
-                               " your tenant: "))
-            if 0 <= choice < len(tenants):
-                selected_option = tenants[choice]
-                return selected_option
+            choice = int(input(f"Enter a number corresponding to your {name_field}: "))
+            print()
+            if 0 <= choice < len(data["results"]):
+                return data["results"][choice]
             else:
-                print("Invalid choice. Please enter a "
-                      "number within the range.")
+                print("Invalid choice. Please enter a number within the range.")
         except ValueError:
             print("Invalid input. Please enter a number.")
         except KeyboardInterrupt:
