@@ -283,17 +283,18 @@ def create_devices(hosts, tenant, config):
     """"""
     device_url = f"{config['base_url']}/api/dcim/devices/"
 
-    # Bulc role
-    # Bulc device_type
-    # Bulc site
+    role = display_device_roles(config)
+    dtype = display_device_types(config)
+    site = display_sites(config)
+
     for host in hosts:
         name = host.get("hostname") or host["mac_addr"]
 
         payload = {
             "name": name,
-            "role": 17,  # school 1, home 17
-            "device_type": 9,  # school 1, home 9
-            "site": 4,  # school 1, home 4-9
+            "role": role["id"],
+            "device_type": dtype["id"],
+            "site": site["id"],
             "status": host["status"],
             "tenant": tenant["id"]
         }
