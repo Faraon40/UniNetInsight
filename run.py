@@ -221,8 +221,50 @@ def display_tenant_options(config):
             sys.exit(1)
 
 
-# TODO
-#   remove hardcoded ids
+def display_tenants(config):
+    """Display available tenant options."""
+    return display_options(
+        config,
+        api_endpoint="/api/tenancy/tenants/",
+        name_field="name",
+        description_field="description",
+        label_name="tenants"
+    )
+
+
+def display_device_roles(config):
+    """Display device roles options."""
+    return display_options(
+        config,
+        api_endpoint="/api/dcim/device-roles/",
+        name_field="name",
+        description_field="description",
+        label_name="Device Roles"
+    )
+
+
+def display_device_types(config):
+    """Display device types options."""
+    return display_options(
+        config,
+        api_endpoint="/api/dcim/device-types/",
+        name_field="display",
+        description_field="description",
+        label_name="Device Types"
+    )
+
+
+def display_sites(config):
+    """Display sites options."""
+    return display_options(
+        config,
+        api_endpoint="/api/dcim/sites/",
+        name_field="name",
+        description_field="description",
+        label_name="Sites"
+    )
+
+
 def create_devices(hosts, tenant, config):
     """"""
     device_url = f"{config['base_url']}/api/dcim/devices/"
