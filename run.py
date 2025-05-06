@@ -480,6 +480,27 @@ def create_manufacturers(hosts, config):
             break
 
 
+def export_hosts_to_csv(hosts, filename, include_ids=False):
+    """Export hosts list to CSV."""
+    # Define fields based on the user's choice
+    if include_ids:
+        fieldnames = ["id", "interface_id", "ip_addr_id", "ip_addr",
+                      "mac_addr", "manufacturer", "status", "hostname"]
+    else:
+        fieldnames = ["ip_addr", "mac_addr", "manufacturer",
+                      "status", "hostname"]
+
+    try:
+        with open(filename, mode='w', newline='', encoding='utf-8') as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for host in hosts:
+                writer.writerow({k: host.get(k, "") for k in fieldnames})
+        print(f"Hosts exported to CSV: {filename}")
+    except Exception as e:
+        print(f"Error exporting to CSV: {e}")
+
+
 def main():
     """"""
     parser = argparse.ArgumentParser(description="Run Nmap ping scan on a"
@@ -501,12 +522,35 @@ def main():
     hosts = parse_nmap_xml(result)
 
     print(json.dumps(hosts, indent=4))
-    tenant = display_tenant_options(config)
-    create_manufacturers(hosts, config)
-    hosts = create_devices(hosts, tenant, config)
-    hosts = create_interfaces(hosts, config)
-    hosts = create_addresses(hosts, tenant, config)
-    update_devices(hosts, config)
+
+    # Ask user if they want to upload to NetBox
+    upload_choice = input("Do you want to upload scanned devices to NetBox? [y/N]: ").strip().lower()
+
+    if upload_choice == 'y':
+        tenant = display_tenants(config)
+        create_manufacturers(hosts, config)
+        hosts = create_devices(hosts, tenant, config)
+        hosts = create_interfaces(hosts, config)
+        hosts = create_addresses(hosts, tenant, config)
+        update_devices(hosts, config)
+
+    # Ask user if they want to export
+    export_choice = input("Do you want to export scan results to CSV? [y/N]: ").strip().lower()
+    if export_choice == 'y':
+        include_ids_choice = input("Include NetBox-assigned IDs in export? [y/N]: ").strip().lower()
+        include_ids = include_ids_choice == 'y'
+
+        # Prompt for output filename if not given in CLI
+        if not args.output:
+            filename = input("Enter output filename (press Enter to use default): ").strip()
+            if not filename:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"output_{timestamp}.csv"
+            elif not filename.lower().endswith('.csv'):
+                filename += '.csv'
+            args.output = filename
+
+        export_hosts_to_csv(hosts, args.output, include_ids=include_ids)
 
 
 if __name__ == "__main__":
