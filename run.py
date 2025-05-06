@@ -298,11 +298,14 @@ def create_devices(hosts, tenant, config):
             "tenant": tenant["id"]
         }
 
-        result = post_to(url=device_url, payload=payload, config=config,
-                         success_msg=f"Device '{name}' added (MAC: "
-                                     f"{host['mac_addr']}).",
-                         failure_msg=f"Failed to add device '{name}' (MAC: "
-                                     f"{host['mac_addr']}).")
+        result = post_to(
+            url=device_url,
+            payload=payload,
+            config=config,
+            success_msg=f"Device '{name}' added (MAC: {host['mac_addr']}).",
+            failure_msg=f"Failed to add device '{name}' "
+                        f"(MAC: {host['mac_addr']})."
+        )
 
         if result:
             host["id"] = result.get("id")
@@ -322,11 +325,14 @@ def create_interfaces(hosts, config):
             "mac_address": host["mac_addr"],
         }
 
-        result = post_to(url=interface_url, payload=payload, config=config,
-                         success_msg=f"Interface for Device {host['id']}"
-                                     f" added.",
-                         failure_msg=f"Failed to add interface for Device "
-                                     f"{host['hostname']}.")
+        result = post_to(
+            url=interface_url,
+            payload=payload,
+            config=config,
+            success_msg=f"Interface for Device {host['id']} added.",
+            failure_msg=f"Failed to add interface for Device "
+                        f"{host['hostname']}."
+        )
 
         if result:
             host["interface_id"] = result.get("id")
@@ -348,10 +354,13 @@ def create_addresses(hosts, tenant, config):
             "assigned_object_id": host["interface_id"],
         }
 
-        result = post_to(url=ip_address_url, payload=payload, config=config,
-                         success_msg=f"IP Address {host['ip_addr']} added.",
-                         failure_msg=f"Failed to add IP Address"
-                                     f" {host['ip_addr']}.")
+        result = post_to(
+            url=ip_address_url,
+            payload=payload,
+            config=config,
+            success_msg=f"IP Address {host['ip_addr']} added.",
+            failure_msg=f"Failed to add IP Address {host['ip_addr']}."
+        )
 
         if result:
             host["ip_addr_id"] = result.get("id")
