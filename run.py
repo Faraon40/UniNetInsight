@@ -96,21 +96,40 @@ def execute_nmap(subnet):
     """"""
     validate_subnet(subnet)
 
-    current_os = platform.system()
+    # Check if nmap is installed
+    if not shutil.which("nmap"):
+        print("Error: 'nmap' is not installed or not in your system's PATH.")
+        print("Please install Nmap and try again.")
+        sys.exit(1)
 
+    current_os = platform.system()
     command = ["nmap", "-sn", "-oX", "-", subnet]
+
     if current_os == "Linux":
+        command.insert(0, "sudo")
+    elif current_os == "Darwin":  # macOS
         command.insert(0, "sudo")
     elif current_os == "Windows":
         pass
     else:
-        print("Unsupported OS.")
+        print(f"Unsupported operating system: {current_os}")
         sys.exit(1)
 
     print(f"Scanning subnet {subnet} ...")
-
-    result = subprocess.run(command, capture_output=True, text=True)
-    return result
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        return result
+    except subprocess.CalledProcessError as e:
+        print("Error: Nmap execution failed.")
+        print(f"Return code: {e.returncode}")
+        print(f"Output: {e.output}")
+        sys.exit(1)
+    except FileNotFoundError:
+        print("Error: Nmap not found. Ensure it is installed and accessible.")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nScan aborted by user.")
+        sys.exit(1)
 
 
 def get_hostname(ip):
