@@ -2,7 +2,10 @@
 
 __author__ = "Antonio Kis"
 
+import csv
 import json
+import shutil
+from datetime import datetime
 import requests
 import subprocess
 import sys
@@ -13,6 +16,26 @@ import yaml
 import os
 import xml.etree.ElementTree as ETree
 import socket
+
+
+def get_local_ips():
+    """Returns a set of all local IPv4 addresses for the current machine."""
+    local_ips = set()
+    hostname = socket.gethostname()
+
+    try:
+        local_ips.add(socket.gethostbyname(hostname))
+    except socket.gaierror:
+        pass
+
+    try:
+        for info in socket.getaddrinfo(hostname, None, family=socket.AF_INET):
+            ip = info[4][0]
+            local_ips.add(ip)
+    except Exception:
+        pass
+
+    return local_ips
 
 
 def post_to(url, payload, config, success_msg="", failure_msg=""):
@@ -508,7 +531,7 @@ def main():
     parser.add_argument("-addr", "--address",
                         help="Subnet in CIDR notation (e.g., 192.168.1.0/24)")
     parser.add_argument("-o", "--output",
-                        help="File to save the output (e.g., results.csv)")
+                        help="File to save the output (e.g., results)")
 
     args = parser.parse_args()
     config = validate_config()
@@ -520,6 +543,16 @@ def main():
 
     result = execute_nmap(subnet=args.address)
     hosts = parse_nmap_xml(result)
+    local_ips = get_local_ips()
+
+    # Identify which hosts match local device
+    local_hosts = [host for host in hosts if host['ip_addr'] in local_ips]
+
+    if local_hosts:
+        print("Your scanning device was detected in the scan.")
+        include_self = input("Do you want to include your own device in the results? [y/N]: ").strip().lower()
+        if include_self != 'y':
+            hosts = [host for host in hosts if host['ip_addr'] not in local_ips]
 
     print(json.dumps(hosts, indent=4))
 
