@@ -8,7 +8,7 @@ Author: _Faraon40_
 - [Project Structure](#project-structure)
 - [Features](#features)
 - [Installation](#installation)
-- [Usage Guide](#usage)
+- [Usage](#usage)
 
 
 ## Overview
@@ -65,16 +65,16 @@ nmap -sn -Ox - <subnet>
 ```
 
 * -sn: Ping scan - detects which host are up (no port scan)
-* -oX - Outputs the scan result in XML format to stdout
-* <subnet>: The target network block to scan (e.g. 192.168.1.0/24)
+* -oX: Outputs the scan result in XML format to stdout
+* subnet: The target network block to scan (e.g. 192.168.1.0/24)
 
 
 ## Installation
 
 ### Requirements
 
-- Python 3.10+
-- NetBox (v4.1.4)
+- [Python 3.10 or newer](https://www.python.org/downloads/)
+- [NetBox (v4.1.4 or newer)](https://github.com/netbox-community/netbox)
 - Linux Distribution (Ubuntu 22.04 or newer) for NetBox
 - Windows/Linux for Network Scanning Tool (UniNetIsight)
 
@@ -94,7 +94,11 @@ cd UniNetInsight
 
 ```bash
 python3 -m venv venv
-source venv/bin/activate   # On Windows: venv\Scripts\activate
+source venv/bin/activate # Linux
+```
+
+```bash
+venv\Scripts\activate # Windows
 ```
 
 ### 3. Install Python Dependencies
@@ -105,6 +109,9 @@ pip install -r requirements.txt
 If you don't have `pip`, install it first.
 
 ### 4. Install System Dependencies (If Required)
+
+#### Windows:
+Download `nmap` from [here](https://nmap.org/download).
 
 #### Ubuntu/Debian:
 ```bash
@@ -123,9 +130,9 @@ brew install nmap
 ### Set up `api_token` and `base_url` in `config.yml` of your running NetBox.
 
 1. Log in to NetBox.
-2. Naviage to you Profile and click "API Tokens" tab.
+2. Navigate to your Profile and click "API Tokens" tab.
 3. Click "Add" to generate a new token and copy the token when it appears.
-4. Edit `configs/config.yml` and paste your token
+4. Edit `configs/config.yml` and paste your token.
 
 
 ```yaml
@@ -138,6 +145,14 @@ base_url: localhost:8000
 
 ```bash
 python run.py
+```
+
+```bash
+python run.py -addr 192.168.1.0/24
+```
+
+```bash
+python run.py -addr 192.168.1.0/24 -o results.csv
 ```
 
 
