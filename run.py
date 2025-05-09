@@ -365,10 +365,6 @@ def get_hostname(ip):
     Raises:
         None explicitly. If the resolution fails, the function catches
         `socket.herror` and returns `None`.
-
-    Example:
-        >>> get_hostname("8.8.8.8")
-        'dns.google'
     """
     try:
         hostname, _, _ = socket.gethostbyaddr(ip)
@@ -517,74 +513,53 @@ def get_from(url, config):
 
 def display_options(
         config, api_endpoint, name_field="option",
-        description_field="description", label_name=None
+        description_field="description", label_name=None,
+        allow_none=False, none_label="No selection"
 ):
     """
     Display a list of options retrieved from a NetBox API endpoint.
 
-    This general-purpose utility function fetches data from a
-    specified API endpoint, displays each item with its name and
-    optional description, and prompts the user to select one of the
-    options. The selected item from the API response is returned as
-    a dictionary.
-
-    Args:
-        config (dict): Configuration dictionary containing at least:
-            - 'base_url' (str): Base URL of the API.
-            - 'api_token' (str): Token for authentication.
-        api_endpoint (str): The API endpoint path to retrieve data
-         from, e.g. "/api/ipam/roles/".
-        name_field (str, optional): Field name to use as the primary
-         display label. Defaults to "option".
-        description_field (str, optional): Field name for an
-         optional description. Defaults to "description".
-        label_name (str, optional): Human-readable label used in the
-         printed prompt; if not provided, it is derived from the
-         endpoint path.
+    Parameters:
+        config (dict): Configuration with 'base_url' and 'api_token'.
+        api_endpoint (str): The API endpoint to fetch data from.
+        name_field (str): Field to display as name (default: "option").
+        description_field (str): Field to display as description.
+        label_name (str): Human-readable label to show in prompt.
+        allow_none (bool): If True, allows selection of None option.
+        none_label (str): Label to use for the "None" option if allowed.
 
     Returns:
-        dict: The dictionary of the selected item from the API's
-        "results" list.
-
-    Side Effects:
-        - Prints the list of options to stdout.
-        - Prompts for user input via `input()`.
-        - Prints messages and errors during the selection process.
-        - Exits the program with `sys.exit(1)` if data retrieval
-          fails or on keyboard interrupt.
-
-    Raises:
-        SystemExit: If no results are returned, data access is
-        denied, or user interrupts with Ctrl+C.
-
-    Example:
-        >>> _config = {'base_url': 'https://netbox.local/api/',
-         'api_token': 'abc123'}
-        >>> selected = display_options(config, '/api/ipam/roles/',
-         name_field='name')
-        >>> print(selected['id'])
+        dict or None: Selected item dictionary or None if no selection.
     """
     url = f"{config['base_url']}{api_endpoint}"
     data = get_from(url, config)
 
     if not data or "results" not in data:
         print("Permission denied or no data found. Contact administrator.")
-        return sys.exit(1)
+        sys.exit(1)
 
     entity_name = label_name or os.path.basename(api_endpoint.strip("/"))
     print(f"Available {entity_name}:")
-    for idx, item in enumerate(data["results"]):
+
+    options = []
+    if allow_none:
+        print("0: " + none_label)
+        options.append(None)
+
+    for idx, item in enumerate(data["results"],
+                               start=(1 if allow_none else 0)):
         name = item.get(name_field, "N/A")
         description = item.get(description_field)
         print(f"{idx}: {name}" + (f" - {description}" if description else ""))
+        options.append(item)
 
     while True:
         try:
             choice = int(input(f"Enter a number corresponding to your"
                                f" {name_field}: "))
             print()
-            if 0 <= choice < len(data["results"]):
-                return data["results"][choice]
+            if 0 <= choice < len(options):
+                return options[choice]
             else:
                 print("Invalid choice. Please enter a number"
                       " within the range.")
@@ -596,13 +571,15 @@ def display_options(
 
 
 def display_tenants(config):
-    """Display available tenant options."""
+    """Display available tenant options, including 'No tenant'."""
     return display_options(
         config,
         api_endpoint="/api/tenancy/tenants/",
         name_field="name",
         description_field="description",
-        label_name="tenants"
+        label_name="tenants",
+        allow_none=True,
+        none_label="No tenant"
     )
 
 
@@ -685,9 +662,11 @@ def create_devices(hosts, tenant, config):
             "role": role["id"],
             "device_type": dtype["id"],
             "site": site["id"],
-            "status": host["status"],
-            "tenant": tenant["id"]
+            "status": host["status"]
         }
+
+        if tenant is not None:
+            payload["tenant"] = tenant["id"]
 
         result = post_to(
             url=device_url,
@@ -794,11 +773,13 @@ def create_addresses(hosts, tenant, config):
         payload = {
             "address": f"{host['ip_addr']}/24",
             "status": "active",
-            "tenant": tenant["id"],
             "description": host["mac_addr"],
             "assigned_object_type": "dcim.interface",
             "assigned_object_id": host["interface_id"],
         }
+
+        if tenant is not None:
+            payload["tenant"] = tenant["id"]
 
         result = post_to(
             url=ip_address_url,
