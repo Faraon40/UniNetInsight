@@ -616,13 +616,13 @@ def display_sites(config):
     )
 
 
-def create_devices(hosts, tenant, config):
+def create_devices(hosts, tenant, site, config):
     """
     Create device entries in NetBox for a list of discovered hosts.
 
     This function uses the provided configuration and tenant information
     to register each host in NetBox as a device. It prompts the user to
-    select the device role, device type, and site using interactive
+    select the site, device role and device type using interactive
     helper functions. Each host is posted to the NetBox API, and the
     resulting device ID is saved back into the corresponding host entry
     if creation succeeds.
@@ -650,35 +650,79 @@ def create_devices(hosts, tenant, config):
     """
     device_url = f"{config['base_url']}/api/dcim/devices/"
 
-    role = display_device_roles(config)
-    dtype = display_device_types(config)
-    site = display_sites(config)
+    print("How do you want to select device roles/types?")
+    print("0: Same role/type for all devices")
+    print("1: Different role/type per device")
 
-    for host in hosts:
-        name = host.get("hostname") or host["mac_addr"]
+    role_mode = input("Enter choice [0/1]: ").strip()
+    print()
 
-        payload = {
-            "name": name,
-            "role": role["id"],
-            "device_type": dtype["id"],
-            "site": site["id"],
-            "status": host["status"]
-        }
+    if role_mode == '0':
+        role = display_device_roles(config)
+        dtype = display_device_types(config)
+        for host in hosts:
+            name = host.get("hostname") or host["mac_addr"]
+            payload = {
+                "name": name,
+                "role": role["id"],
+                "device_type": dtype["id"],
+                "site": site["id"],
+                "status": host["status"]
+            }
+            if tenant is not None:
+                payload["tenant"] = tenant["id"]
 
-        if tenant is not None:
-            payload["tenant"] = tenant["id"]
+            result = post_to(
+                url=device_url,
+                payload=payload,
+                config=config,
+                success_msg=f"Device '{name}' added "
+                            f"(MAC: {host['mac_addr']}).",
+                failure_msg=f"Failed to add device '{name}' "
+                            f"(MAC: {host['mac_addr']})."
+            )
 
-        result = post_to(
-            url=device_url,
-            payload=payload,
-            config=config,
-            success_msg=f"Device '{name}' added (MAC: {host['mac_addr']}).",
-            failure_msg=f"Failed to add device '{name}' "
-                        f"(MAC: {host['mac_addr']})."
-        )
+            if result:
+                host["id"] = result.get("id")
 
-        if result:
-            host["id"] = result.get("id")
+    else:
+        creation_messages = []
+        for host in hosts:
+            print(f"Assigning role/type for device: "
+                  f"{host['ip_addr']} | "
+                  f"MAC: {host['mac_addr']} | "
+                  f"Manufacturer: {host['manufacturer']}")
+            role = display_device_roles(config)
+            dtype = display_device_types(config)
+            name = host.get("hostname") or host["mac_addr"]
+            payload = {
+                "name": name,
+                "role": role["id"],
+                "device_type": dtype["id"],
+                "site": site["id"],
+                "status": host["status"]
+            }
+            if tenant is not None:
+                payload["tenant"] = tenant["id"]
+
+            result = post_to(
+                url=device_url,
+                payload=payload,
+                config=config
+            )
+
+            if result:
+                host["id"] = result.get("id")
+                creation_messages.append(
+                    f"Device '{name}' added (MAC: {host['mac_addr']})."
+                )
+            else:
+                creation_messages.append(
+                    f"Failed to add device '{name}' (MAC: {host['mac_addr']})."
+                )
+
+        for msg in creation_messages:
+            print(msg)
 
     return hosts
 
@@ -959,6 +1003,7 @@ def main():
 
     args = parser.parse_args()
     config = validate_config()
+    selected_hosts = []
 
     # Prompt if address was not provided via CLI
     if not args.address:
@@ -983,30 +1028,60 @@ def main():
 
     print(json.dumps(hosts, indent=4))
 
-    # Ask user if they want to upload to NetBox
-    upload_choice = input("Do you want to upload scanned devices to NetBox?"
-                          " [y/N]: ").strip().lower()
+    # Ask user if or how they want to upload to NetBox
+    print("\nChoose how to upload scanned devices to NetBox:")
+    print("0: Do not upload")
+    print("1: Upload all devices")
+    print("2: Select devices individually")
 
-    if upload_choice == 'y':
+    upload_mode = input("Enter choice [0/1/2]: ").strip()
+    print()
+
+    if upload_mode == '0':
+        pass
+    elif upload_mode == '1':
+        selected_hosts = hosts
+    elif upload_mode == '2':
+        selected_hosts = []
+        for host in hosts:
+            print(f"Device: {host['ip_addr']} | "
+                  f"MAC: {host['mac_addr']} | "
+                  f"Manufacturer: {host['manufacturer']}")
+            choice = input("Do you want to upload this device to NetBox? "
+                           "[y/N]: ").strip().lower()
+            print()
+            if choice == 'y':
+                selected_hosts.append(host)
+    else:
+        print("Invalid input. Skipping upload.")
+        selected_hosts = []
+
+    if upload_mode in ['1', '2']:
         tenant = display_tenants(config)
-        create_manufacturers(hosts, config)
-        hosts = create_devices(hosts, tenant, config)
-        hosts = create_interfaces(hosts, config)
-        hosts = create_addresses(hosts, tenant, config)
-        update_devices(hosts, config)
+        site = display_sites(config)
+        create_manufacturers(selected_hosts, config)
+        selected_hosts = create_devices(selected_hosts, tenant, site, config)
+        selected_hosts = create_interfaces(selected_hosts, config)
+        selected_hosts = create_addresses(selected_hosts, tenant, config)
+        update_devices(selected_hosts, config)
 
-    # Ask user if they want to export
-    export_choice = input("Do you want to export scan results to CSV?"
-                          " [y/N]: ").strip().lower()
-    if export_choice == 'y':
-        include_ids_choice = input("Include NetBox-assigned IDs in export?"
-                                   " [y/N]: ").strip().lower()
+    # Ask user if or how they want to export
+    print("\nDo you want to export scan results to CSV?")
+    print("0: Do not export any devices")
+    print("1: Export all scanned devices")
+    print("2: Export only devices selected for NetBox upload")
+
+    export_choice = input("Enter choice [0/1/2]: ").strip()
+
+    if export_choice in ['1', '2']:
+        include_ids_choice = input("Include NetBox-assigned IDs in export? "
+                                   "[y/N]: ").strip().lower()
         include_ids = include_ids_choice == 'y'
 
         # Prompt for output filename if not given in CLI
         if not args.output:
-            filename = input("Enter output filename (press Enter to use"
-                             " default): ").strip()
+            filename = input("Enter output filename "
+                             "(press Enter to use default): ").strip()
             if not filename:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 filename = f"output_{timestamp}.csv"
@@ -1014,7 +1089,15 @@ def main():
                 filename += '.csv'
             args.output = filename
 
-        export_hosts_to_csv(hosts, args.output, include_ids=include_ids)
+        if export_choice == '1':
+            export_data = hosts
+        else:
+            if not selected_hosts:
+                print("\nNo devices were uploaded, "
+                      "so there is nothing to export.")
+                return
+            export_data = selected_hosts
+        export_hosts_to_csv(export_data, args.output, include_ids=include_ids)
 
 
 if __name__ == "__main__":
