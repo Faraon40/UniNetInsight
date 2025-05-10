@@ -695,7 +695,7 @@ def create_devices(hosts, tenant, site, config):
     for host in hosts:
         ip = host.get("ip_addr")
         if ip in existing_ips:
-            print(f"Device: {host['hostname'] or host["mac_addr"]} | "
+            print(f"Device: {host['hostname'] or host['mac_addr']} | "
                   f"MAC: {host['mac_addr']} | "
                   f"Ip Address: {host['ip_addr']} already exists in Netbox.")
         else:
