@@ -54,6 +54,8 @@ import csv
 import json
 import shutil
 from datetime import datetime
+from ipaddress import ip_address
+
 import requests
 import subprocess
 import sys
@@ -103,7 +105,7 @@ def get_local_ips():
         for info in socket.getaddrinfo(hostname, None, family=socket.AF_INET):
             ip = info[4][0]
             local_ips.add(ip)
-    except Exception:
+    except socket.gaierror:
         pass
 
     return local_ips
@@ -423,7 +425,7 @@ def parse_nmap_xml(xml_data, default_vendor="Unspecified"):
         for addr in host.findall("address"):
             if addr.attrib["addrtype"] == "ipv4":
                 ip = addr.attrib["addr"]
-                # hostname = get_hostname(ip)
+                hostname = get_hostname(ip)
             elif addr.attrib["addrtype"] == "mac":
                 mac = addr.attrib["addr"]
                 vendor = addr.attrib.get("vendor", default_vendor)
@@ -631,10 +633,11 @@ def create_devices(hosts, tenant, site, config):
         hosts (list of dict): A list of discovered host dictionaries,
          each containing:
             - 'mac_addr' (str): MAC address of the host.
-            - 'hostname' (str or None): Resolved hostname (may be None).
+            - 'hostname' (str or None): Resolved hostname (maybe None).
             - 'status' (str): Operational status, e.g., "active" or
               "offline".
         tenant (dict): A dictionary representing the selected NetBox
+        site: A location representing infrastructure.
          tenant, must contain:
             - 'id' (int): ID of the tenant.
         config (dict): Configuration dictionary with:
@@ -654,7 +657,52 @@ def create_devices(hosts, tenant, site, config):
     print("0: Same role/type for all devices")
     print("1: Different role/type per device")
 
-    role_mode = input("Enter choice [0/1]: ").strip()
+    while True:
+        try:
+            role_mode = input("Enter choice [0/1]: ").strip()
+            print()
+            if role_mode in ["0", "1"]:
+                break
+            else:
+                print("Invalid choice. Enter choice [0/1]:")
+                print()
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+        except KeyboardInterrupt:
+            print("\nOperation terminated by the user.")
+            sys.exit(1)
+
+    ip_address_data = get_from(
+        url=f"{config['base_url']}/api/ipam/ip-addresses/",
+        config=config
+    )
+
+    existing_ips = set()
+    existing_addr = ip_address_data.get("results", [])
+    for addr in existing_addr:
+        raw_ip = addr.get("address")
+        if raw_ip:
+            try:
+                # Strip subnet mask, keep only the IP address
+                ip = str(ipaddress.ip_interface(raw_ip).ip)
+                existing_ips.add(ip)
+            except ValueError:
+                continue  # Skip malformed IPs
+
+    # Compare scanned hosts
+    new_hosts = []
+
+    for host in hosts:
+        ip = host.get("ip_addr")
+        if ip in existing_ips:
+            print(f"Device: {host['hostname'] or host["mac_addr"]} | "
+                  f"MAC: {host['mac_addr']} | "
+                  f"Ip Address: {host['ip_addr']} already exists in Netbox.")
+        else:
+            new_hosts.append(host)
+
+    hosts = new_hosts
+    input("Press any key to continue: ").strip()
     print()
 
     if role_mode == '0':
@@ -686,7 +734,6 @@ def create_devices(hosts, tenant, site, config):
                 host["id"] = result.get("id")
 
     else:
-        creation_messages = []
         for host in hosts:
             print(f"Assigning role/type for device: "
                   f"{host['ip_addr']} | "
@@ -694,6 +741,7 @@ def create_devices(hosts, tenant, site, config):
                   f"Manufacturer: {host['manufacturer']}")
             role = display_device_roles(config)
             dtype = display_device_types(config)
+
             name = host.get("hostname") or host["mac_addr"]
             payload = {
                 "name": name,
@@ -708,21 +756,15 @@ def create_devices(hosts, tenant, site, config):
             result = post_to(
                 url=device_url,
                 payload=payload,
-                config=config
+                config=config,
+                success_msg=f"Device '{name}' added "
+                            f"(MAC: {host['mac_addr']}).",
+                failure_msg=f"Failed to add device '{name}' "
+                            f"(MAC: {host['mac_addr']})."
             )
 
             if result:
                 host["id"] = result.get("id")
-                creation_messages.append(
-                    f"Device '{name}' added (MAC: {host['mac_addr']})."
-                )
-            else:
-                creation_messages.append(
-                    f"Failed to add device '{name}' (MAC: {host['mac_addr']})."
-                )
-
-        for msg in creation_messages:
-            print(msg)
 
     return hosts
 
@@ -1034,8 +1076,19 @@ def main():
     print("1: Upload all devices")
     print("2: Select devices individually")
 
-    upload_mode = input("Enter choice [0/1/2]: ").strip()
-    print()
+    while True:
+        try:
+            upload_mode = input("Enter choice [0/1/2]: ").strip()
+            print()
+            if upload_mode in ["0", "1", "2"]:
+                break
+            else:
+                print("Invalid choice. Enter choice [0/1/2]:")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+        except KeyboardInterrupt:
+            print("\nOperation terminated by the user.")
+            sys.exit(1)
 
     if upload_mode == '0':
         pass
@@ -1043,6 +1096,7 @@ def main():
         selected_hosts = hosts
     elif upload_mode == '2':
         selected_hosts = []
+
         for host in hosts:
             print(f"Device: {host['ip_addr']} | "
                   f"MAC: {host['mac_addr']} | "
@@ -1071,7 +1125,19 @@ def main():
     print("1: Export all scanned devices")
     print("2: Export only devices selected for NetBox upload")
 
-    export_choice = input("Enter choice [0/1/2]: ").strip()
+    while True:
+        try:
+            export_choice = input("Enter choice [0/1/2]: ").strip()
+            print()
+            if export_choice in ["0", "1", "2"]:
+                break
+            else:
+                print("Invalid choice. Enter choice [0/1/2]: ")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+        except KeyboardInterrupt:
+            print("\nOperation terminated by the user.")
+            sys.exit(1)
 
     if export_choice in ['1', '2']:
         include_ids_choice = input("Include NetBox-assigned IDs in export? "
