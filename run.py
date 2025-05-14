@@ -1083,7 +1083,8 @@ def main():
             ]
 
     print(json.dumps(hosts, indent=4))
-
+    print(f"Device scanned: {len(hosts)}")
+    print()
     # Ask user if or how they want to upload to NetBox
     print("\nChoose how to upload scanned devices to NetBox:")
     print("0: Do not upload")
@@ -1137,6 +1138,10 @@ def main():
             prefix
         )
         update_devices(selected_hosts, config)
+
+    count_with_id = sum(1 for host in selected_hosts if host["id"] is not None)
+    print(f"Imported devices: {count_with_id}")
+    print()
 
     # Ask user if or how they want to export
     print("\nDo you want to export scan results to CSV?")
