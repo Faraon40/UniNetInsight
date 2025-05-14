@@ -970,9 +970,16 @@ def create_manufacturers(hosts, config):
     for manufacturer in new_manufacturers:
         if manufacturer.lower() in existing_manufacturers:
             continue
+        manufacturer = manufacturer.lower()
+        manufacturer = manufacturer.replace(" ", "-")
+        manufacturer = manufacturer.replace("(", "-")
+        manufacturer = manufacturer.replace(")", "-")
+        manufacturer = manufacturer.replace(".", "-")
+        manufacturer = manufacturer.replace("/", "-")
+
         payload = {
             "name": manufacturer,
-            "slug": manufacturer.lower().replace(" ", "-")
+            "slug": manufacturer
         }
 
         post_to(
