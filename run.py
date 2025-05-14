@@ -822,7 +822,7 @@ def create_interfaces(hosts, config):
     return hosts
 
 
-def create_addresses(hosts, tenant, config):
+def create_addresses(hosts, tenant, config, prefix):
     """
     Create IP address entries in NetBox for a list of devices.
 
@@ -845,6 +845,11 @@ def create_addresses(hosts, tenant, config):
         config (dict): Configuration dictionary with:
             - 'base_url' (str): Base URL of the NetBox API.
             - 'api_token' (str): Token used for authentication.
+        prefix (int): CIDR prefix length (e.g., 24 for a /24 subnet),
+            which will be appended to each host's IP address when
+            registering it in NetBox. This determines the subnet mask
+            (e.g., /24 = 255.255.255.0) and specifies the network portion
+            of the IP address.
 
     Returns:
         list of dict: The original list of hosts, with each successfully
@@ -857,7 +862,7 @@ def create_addresses(hosts, tenant, config):
 
     for host in hosts:
         payload = {
-            "address": f"{host['ip_addr']}/24",
+            "address": f"{host['ip_addr']}/{prefix}",
             "status": "active",
             "description": host["mac_addr"],
             "assigned_object_type": "dcim.interface",
@@ -1059,6 +1064,8 @@ def main():
         args.address = input("Enter subnet (CIDR notation, "
                              "e.g. 192.168.1.0/24): ").strip()
 
+    prefix = args.address.split('/')[1]
+
     result = execute_nmap(subnet=args.address)
     hosts = parse_nmap_xml(result)
     local_ips = get_local_ips()
@@ -1123,7 +1130,12 @@ def main():
         create_manufacturers(selected_hosts, config)
         selected_hosts = create_devices(selected_hosts, tenant, site, config)
         selected_hosts = create_interfaces(selected_hosts, config)
-        selected_hosts = create_addresses(selected_hosts, tenant, config)
+        selected_hosts = create_addresses(
+            selected_hosts,
+            tenant,
+            config,
+            prefix
+        )
         update_devices(selected_hosts, config)
 
     # Ask user if or how they want to export
