@@ -281,8 +281,6 @@ def execute_nmap(subnet):
         validate_subnet("10.0.0.0/16")  # Valid
         validate_subnet("192.168.1.100")  # Invalid, missing subnet mask
     """
-    validate_subnet(subnet)
-
     # Check if nmap is installed
     if not shutil.which("nmap"):
         print("Error: 'nmap' is not installed or not in your system's PATH.")
@@ -783,30 +781,8 @@ def create_devices(hosts, tenant, site, config):
 
     """
     device_url = f"{config['base_url']}/api/dcim/devices/"
-
-    print("How do you want to select device roles/types?")
-    print("0: Same role/type for all devices")
-    print("1: Different role/type per device")
-
-    while True:
-        try:
-            role_mode = input("Enter choice [0/1]: ").strip()
-            print()
-            if role_mode in ["0", "1"]:
-                break
-            else:
-                print("Invalid choice. Enter choice [0/1]:")
-                print()
-        except ValueError:
-            print("Invalid input. Please enter a number.")
-        except KeyboardInterrupt:
-            print("\nOperation terminated by the user.")
-            sys.exit(1)
-
-    ip_address_data = get_from(
-        url=f"{config['base_url']}/api/ipam/ip-addresses/",
-        config=config
-    )
+    ip_address_url = f"{config['base_url']}/api/ipam/ip-addresses/"
+    ip_address_data = get_from(url=ip_address_url, config=config)
 
     existing_ips = set()
     existing_addr = ip_address_data.get("results", [])
@@ -822,7 +798,6 @@ def create_devices(hosts, tenant, site, config):
 
     # Compare scanned hosts
     new_hosts = []
-
     for host in hosts:
         ip = host.get("ip_addr")
         if ip in existing_ips:
@@ -832,38 +807,33 @@ def create_devices(hosts, tenant, site, config):
         else:
             new_hosts.append(host)
 
-    hosts = new_hosts
-    input("Press any key to continue: ").strip()
+    if sorted(
+            hosts,
+            key=lambda x: x.get("ip_addr")
+    ) != sorted(new_hosts, key=lambda x: x.get("ip_addr")):
+        hosts = new_hosts
+    else:
+        print("No duplicates detected in the NetBox.")
+
+    input("Press any key to continue: \n").strip()
+
+    print("How do you want to select Device Roles?")
+    print("0: Same Device Role for all devices")
+    print("1: Different Device Role per device")
+
+    # Ask for role mode
+    while True:
+        role_mode = input("Enter choice [0/1]: ").strip()
+        if role_mode in ["0", "1"]:
+            break
+        print("Invalid choice. Enter choice [0/1]: ")
     print()
 
+    # Role assignment
     if role_mode == '0':
         role = display_device_roles(config)
-        dtype = display_device_types(config)
         for host in hosts:
-            name = host.get("hostname") or host["mac_addr"]
-            payload = {
-                "name": name,
-                "role": role["id"],
-                "device_type": dtype["id"],
-                "site": site["id"],
-                "status": host["status"]
-            }
-            if tenant is not None:
-                payload["tenant"] = tenant["id"]
-
-            result = post_to(
-                url=device_url,
-                payload=payload,
-                config=config,
-                success_msg=f"Device '{name}' added "
-                            f"(MAC: {host['mac_addr']}).",
-                failure_msg=f"Failed to add device '{name}' "
-                            f"(MAC: {host['mac_addr']})."
-            )
-
-            if result:
-                host["id"] = result.get("id")
-
+            assign_device(host, role, site, tenant, config, device_url)
     else:
         for host in hosts:
             print(f"Assigning role/type for device: "
@@ -871,31 +841,7 @@ def create_devices(hosts, tenant, site, config):
                   f"MAC: {host['mac_addr']} | "
                   f"Manufacturer: {host['manufacturer']}")
             role = display_device_roles(config)
-            dtype = display_device_types(config)
-
-            name = host.get("hostname") or host["mac_addr"]
-            payload = {
-                "name": name,
-                "role": role["id"],
-                "device_type": dtype["id"],
-                "site": site["id"],
-                "status": host["status"]
-            }
-            if tenant is not None:
-                payload["tenant"] = tenant["id"]
-
-            result = post_to(
-                url=device_url,
-                payload=payload,
-                config=config,
-                success_msg=f"Device '{name}' added "
-                            f"(MAC: {host['mac_addr']}).",
-                failure_msg=f"Failed to add device '{name}' "
-                            f"(MAC: {host['mac_addr']})."
-            )
-
-            if result:
-                host["id"] = result.get("id")
+            assign_device(host, role, site, tenant, config, device_url)
 
     return hosts
 
@@ -1126,149 +1072,156 @@ def export_hosts_to_csv(hosts, filename, include_ids=False):
         print(f"Error exporting to CSV: {e}")
 
 
-def main():
-    """Execute the main code."""
-
-    parser = argparse.ArgumentParser(description="Run Nmap ping scan on a"
-                                                 " given subnet.")
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description="Run Nmap ping scan on a given subnet.")
     parser.add_argument("-addr", "--address",
                         help="Subnet in CIDR notation (e.g., 192.168.1.0/24)")
     parser.add_argument("-o", "--output",
-                        help="File to save the output (e.g., results)")
+                        help="File to save the output (e.g., results.csv)")
+    return parser.parse_args()
 
-    args = parser.parse_args()
-    config = validate_config()
-    selected_hosts = []
 
-    # Prompt if address was not provided via CLI
-    if not args.address:
-        args.address = input("Enter subnet (CIDR notation, "
-                             "e.g. 192.168.1.0/24): ").strip()
+def parse_subnet(provided_address):
+    """"""
+    while True:
+        address = provided_address.strip() if provided_address else input(
+            "Enter subnet (CIDR notation, e.g. 192.168.1.0/24): "
+        ).strip()
+        if '/' not in address:
+            print("Error: Subnet must be in CIDR notation (e.g., 192.168.1.0/24).\n")
+            continue
 
-    prefix = args.address.split('/')[1]
+        try:
+            ip_network = ipaddress.ip_network(address, strict=False)
+            prefix = str(ip_network).split('/')[1]
+            return str(ip_network), prefix
+        except ValueError as e:
+            print(f"Invalid subnet: {e}\n")
+            if provided_address:
+                sys.exit(1)
+            provided_address = None
 
-    result = execute_nmap(subnet=args.address)
+
+def run_nmap_scan(subnet):
+    result = execute_nmap(subnet=subnet)
     hosts = parse_nmap_xml(result)
-    local_ips = get_local_ips()
+    print(json.dumps(hosts, indent=4))
+    print(f"\nDevices scanned: {len(hosts)}\n")
+    return hosts
 
-    # Identify which hosts match local device
+
+def include_host(hosts):
+    local_ips = get_local_ips()
     local_hosts = [host for host in hosts if host['ip_addr'] in local_ips]
 
     if local_hosts:
-        print("Your scanning device was detected in the scan.")
-        include_self = input("Do you want to include your own device in the"
-                             " results? [y/N]: ").strip().lower()
-        if include_self != 'y':
-            hosts = [
-                host for host in hosts if host['ip_addr'] not in local_ips
-            ]
+        print("Your device was detected in the scan.")
+        include_self = input("Include your own device in results? [y/N]: ").strip().lower()
+        if include_self != 'y' or 'Y':
+            hosts = [host for host in hosts if host['ip_addr'] not in local_ips]
+    return hosts
 
-    print(json.dumps(hosts, indent=4))
-    print(f"Device scanned: {len(hosts)}")
-    print()
-    # Ask user if or how they want to upload to NetBox
+
+def upload(hosts, config, prefix):
     print("\nChoose how to upload scanned devices to NetBox:")
     print("0: Do not upload")
     print("1: Upload all devices")
     print("2: Select devices individually")
 
     while True:
-        try:
-            upload_mode = input("Enter choice [0/1/2]: ").strip()
-            print()
-            if upload_mode in ["0", "1", "2"]:
-                break
-            else:
-                print("Invalid choice. Enter choice [0/1/2]:")
-        except ValueError:
-            print("Invalid input. Please enter a number.")
-        except KeyboardInterrupt:
-            print("\nOperation terminated by the user.")
-            sys.exit(1)
+        upload_mode = input("Enter choice [0/1/2]: ").strip()
+        if upload_mode in ["0", "1", "2"]:
+            break
+        print("Invalid choice. Enter choice [0/1/2]: ")
+    print()
 
+    selected_hosts = []
     if upload_mode == '0':
-        pass
+        return []
     elif upload_mode == '1':
         selected_hosts = hosts
     elif upload_mode == '2':
-        selected_hosts = []
-
         for host in hosts:
-            print(f"Device: {host['ip_addr']} | "
-                  f"MAC: {host['mac_addr']} | "
-                  f"Manufacturer: {host['manufacturer']}")
-            choice = input("Do you want to upload this device to NetBox? "
+            print(f"Device: {host['ip_addr']} "
+                  f"| MAC: {host['mac_addr']} "
+                  f"| Manufacturer: {host['manufacturer']}")
+            choice = input("Upload this device to NetBox? "
                            "[y/N]: ").strip().lower()
-            print()
             if choice == 'y':
                 selected_hosts.append(host)
-    else:
-        print("Invalid input. Skipping upload.")
-        selected_hosts = []
 
-    if upload_mode in ['1', '2']:
-        tenant = display_tenants(config)
-        site = display_sites(config)
-        create_manufacturers(selected_hosts, config)
-        selected_hosts = create_devices(selected_hosts, tenant, site, config)
-        selected_hosts = create_interfaces(selected_hosts, config)
-        selected_hosts = create_addresses(
-            selected_hosts,
-            tenant,
-            config,
-            prefix
-        )
-        update_devices(selected_hosts, config)
+    tenant = display_tenants(config)
+    site = display_sites(config)
+
+    selected_hosts = create_manufacturers(selected_hosts, config)
+    selected_hosts = create_device_types(selected_hosts, config)
+    selected_hosts = create_devices(selected_hosts, tenant, site, config)
+    selected_hosts = create_interfaces(selected_hosts, config)
+    selected_hosts = create_addresses(
+        selected_hosts,
+        tenant,
+        config,
+        int(prefix))
+    update_devices(selected_hosts, config)
 
     count_with_id = sum(1 for host in selected_hosts if host["id"] is not None)
-    print(f"Imported devices: {count_with_id}")
-    print()
 
-    # Ask user if or how they want to export
+    print(f"\nImported devices: {count_with_id}\n")
+
+    return hosts
+
+
+def export(cli_output, all_hosts, uploaded_hosts):
     print("\nDo you want to export scan results to CSV?")
-    print("0: Do not export any devices")
+    print("0: Do not export")
     print("1: Export all scanned devices")
-    print("2: Export only devices selected for NetBox upload")
+    print("2: Export only uploaded devices")
 
     while True:
-        try:
-            export_choice = input("Enter choice [0/1/2]: ").strip()
-            print()
-            if export_choice in ["0", "1", "2"]:
-                break
-            else:
-                print("Invalid choice. Enter choice [0/1/2]: ")
-        except ValueError:
-            print("Invalid input. Please enter a number.")
-        except KeyboardInterrupt:
-            print("\nOperation terminated by the user.")
-            sys.exit(1)
+        export_choice = input("Enter choice [0/1/2]: ").strip()
+        if export_choice in ["0", "1", "2"]:
+            break
+        print("Invalid choice. Try again.")
 
-    if export_choice in ['1', '2']:
-        include_ids_choice = input("Include NetBox-assigned IDs in export? "
-                                   "[y/N]: ").strip().lower()
-        include_ids = include_ids_choice == 'y'
+    if export_choice == '0':
+        return
 
-        # Prompt for output filename if not given in CLI
-        if not args.output:
-            filename = input("Enter output filename "
-                             "(press Enter to use default): ").strip()
-            if not filename:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"output_{timestamp}.csv"
-            elif not filename.lower().endswith('.csv'):
-                filename += '.csv'
-            args.output = filename
+    include_ids = input("Include NetBox-assigned IDs? "
+                        "[y/N]: ").strip().lower() == 'y'
 
-        if export_choice == '1':
-            export_data = hosts
-        else:
-            if not selected_hosts:
-                print("\nNo devices were uploaded, "
-                      "so there is nothing to export.")
-                return
-            export_data = selected_hosts
-        export_hosts_to_csv(export_data, args.output, include_ids=include_ids)
+    if not cli_output:
+        filename = input("Enter output filename "
+                         "(leave blank for default): ").strip()
+        if not filename:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"output_{timestamp}.csv"
+        elif not filename.lower().endswith('.csv'):
+            filename += '.csv'
+        cli_output = filename
+
+    if export_choice == '1':
+        export_data = all_hosts
+    elif export_choice == '2':
+        if not uploaded_hosts:
+            print("No uploaded devices to export.")
+            return
+        export_data = uploaded_hosts
+
+    export_hosts_to_csv(export_data, cli_output, include_ids=include_ids)
+
+
+def main():
+    """Entry point for the Nmap scan and NetBox integration script."""
+    args = parse_arguments()
+    config = validate_config()
+    subnet, prefix = parse_subnet(args.address)
+
+    hosts = run_nmap_scan(subnet)
+    hosts = include_host(hosts)
+    hosts = upload(hosts, config, prefix)
+
+    export(args.output, hosts, hosts)
 
 
 if __name__ == "__main__":
