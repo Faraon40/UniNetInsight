@@ -54,8 +54,6 @@ import csv
 import json
 import shutil
 from datetime import datetime
-from ipaddress import ip_address
-
 import requests
 import subprocess
 import sys
