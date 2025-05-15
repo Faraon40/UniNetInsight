@@ -1048,6 +1048,7 @@ def export_hosts_to_csv(hosts, filename, include_ids=False):
 
 def main():
     """Execute the main code."""
+
     parser = argparse.ArgumentParser(description="Run Nmap ping scan on a"
                                                  " given subnet.")
     parser.add_argument("-addr", "--address",
