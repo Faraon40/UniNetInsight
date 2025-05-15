@@ -7,45 +7,11 @@ to retrieve device information, add new devices, update device
 configurations, manage manufacturers, and export host data to
 a CSV file.
 
-Functions:
-    - load_config: Loads the configuration from a YAML file or
-     environment variables.
-    - validate_config: Validates the configuration by checking for the
-     required keys.
-    - validate_subnet: Validates the provided subnet to ensure it is in
-     a correct format.
-    - get_hostname: Retrieves the hostname associated with a given IP
-     address.
-    - parse_nmap_xml: Parses Nmap XML output and extracts host
-     information such as IP, MAC, and status.
-    - get_from: Fetches data from a given URL using the GET method.
-    - display_options: Displays available options from the API and
-     prompts the user to select one.
-    - create_devices: Creates new devices in the NetBox API based on
-     provided host information.
-    - create_interfaces: Creates interfaces for devices in the
-     NetBox API.
-    - create_addresses: Creates IP addresses for devices in the
-     NetBox API.
-    - update_devices: Updates device information in the NetBox API,
-     such as the primary IP address.
-    - create_manufacturers: Adds new manufacturers to the NetBox API
-     if they do not already exist.
-    - export_hosts_to_csv: Exports a list of hosts to a CSV file,
-     with options to include or exclude IDs.
-
 Module Usage:
     This module requires the configuration file `config.yml` to contain
      API tokens and base URL for the NetBox API. It also depends on the
      `requests` and `xml.etree.ElementTree` libraries for interacting
      with the API and parsing Nmap XML output.
-
-    Example:
-        config = load_config()
-        validate_config()
-        hosts = parse_nmap_xml(nmap_data)
-        create_devices(hosts, tenant, config)
-        export_hosts_to_csv(hosts, "hosts.csv")
 """
 
 __author__ = "Antonio Kis"
@@ -584,7 +550,19 @@ def display_sites(config):
 
 
 def slugify(name):
-    """Create a NetBox-compatible slug from a manufacturer name."""
+    """
+    Generate a NetBox-compatible slug from a manufacturer name.
+
+    Convert the given name to lowercase, replace spaces and special
+     characters (parentheses, periods, forward slashes, asterisks)
+     with hyphens.
+
+    Args:
+        name (str): The manufacturer name to slugify.
+
+    Returns:
+        str: The generated slug.
+    """
     return (
         name.lower()
         .replace(" ", "-")
@@ -597,8 +575,7 @@ def slugify(name):
 
 
 def create_manufacturers(hosts, config):
-    """
-    Ensure all manufacturers from hosts exist in NetBox, and assign their IDs.
+    """Ensure all manufacturers from hosts exist in NetBox.
 
     Args:
         hosts (list of dict): Hosts with 'manufacturer' field.
@@ -655,14 +632,15 @@ def create_manufacturers(hosts, config):
 
 
 def create_device_types(hosts, config):
-    """
-    Ensure all device types from hosts exist in NetBox, and assign their IDs.
+    """Ensure all device types from hosts exist in NetBox.
 
     Each device type is created or fetched based on its model name
     (usually same as manufacturer), tied to a manufacturer_id.
 
     Args:
-        hosts (list of dict): Hosts with 'manufacturer', 'manufacturer_id'.
+        hosts (list of dict): Hosts with
+         'manufacturer',
+         'manufacturer_id'.
         config (dict): API config.
 
     Returns:
@@ -719,7 +697,31 @@ def create_device_types(hosts, config):
 
 
 def assign_device(host, role, site, tenant, config, device_url):
-    """"""
+    """
+    Assign a device to a site and role in NetBox.
+
+    Creates a new device in NetBox using the provided host information,
+    role, site, and optionally a tenant.
+
+    Args:
+        host (dict): A dictionary containing host information, including
+            'hostname' (or 'mac_addr' if hostname is None),
+            'device_type_id', 'status', and 'manufacturer'.
+        role (dict): A dictionary containing the device role
+         information, including its 'id' in NetBox.
+        site (dict): A dictionary containing the site information,
+         including its 'id' in NetBox.
+        tenant (dict, optional): A dictionary containing the tenant
+         information, including its 'id' in NetBox. Defaults to None.
+        config (dict): Configuration object for making API calls.
+        device_url (str): The API endpoint URL for creating
+         devices in NetBox.
+
+    Returns:
+        None: The function modifies the 'host' dictionary in place by
+         adding the 'id' of the created device if the API
+         call is successful.
+    """
     name = host["hostname"] or host["mac_addr"]
     payload = {
         "name": name,
@@ -925,8 +927,8 @@ def create_addresses(hosts, tenant, config, prefix):
         prefix (int): CIDR prefix length (e.g., 24 for a /24 subnet),
             which will be appended to each host's IP address when
             registering it in NetBox. This determines the subnet mask
-            (e.g., /24 = 255.255.255.0) and specifies the network portion
-            of the IP address.
+            (e.g., /24 = 255.255.255.0) and specifies the network
+             portion of the IP address.
 
     Returns:
         list of dict: The original list of hosts, with each successfully
@@ -1073,6 +1075,17 @@ def export_hosts_to_csv(hosts, filename, include_ids=False):
 
 
 def parse_arguments():
+    """
+    Parse command-line arguments for the Nmap scanner.
+
+    Defines and parses command-line arguments including the target
+     subnet and an optional output file path.
+
+    Returns:
+        argparse.Namespace: An object containing the parsed command-line
+            arguments, accessible as attributes (e.g., args.address,
+            args.output).
+    """
     parser = argparse.ArgumentParser(
         description="Run Nmap ping scan on a given subnet.")
     parser.add_argument("-addr", "--address",
@@ -1083,13 +1096,33 @@ def parse_arguments():
 
 
 def parse_subnet(provided_address):
-    """"""
+    """
+    Parse a subnet in CIDR notation.
+
+    Prompts the user for a subnet in CIDR notation if no address is
+     provided.
+    Validates the input and returns the network address and prefix.
+
+    Args:
+        provided_address (str, optional): The subnet in CIDR notation.
+            If None, the user will be prompted for input.
+             Defaults to None.
+
+    Returns:
+        tuple (str, str): A tuple containing the network address (e.g.,
+            '192.168.1.0') and the prefix (e.g., '24') as strings.
+
+    Raises:
+        SystemExit: If an invalid subnet is provided as an argument
+            (i.e., not None).
+    """
     while True:
         address = provided_address.strip() if provided_address else input(
             "Enter subnet (CIDR notation, e.g. 192.168.1.0/24): "
         ).strip()
         if '/' not in address:
-            print("Error: Subnet must be in CIDR notation (e.g., 192.168.1.0/24).\n")
+            print("Error: Subnet must be in "
+                  "CIDR notation (e.g., 192.168.1.0/24).\n")
             continue
 
         try:
@@ -1104,6 +1137,21 @@ def parse_subnet(provided_address):
 
 
 def run_nmap_scan(subnet):
+    """
+    Run an Nmap scan on the specified subnet and process the results.
+
+    Executes an Nmap scan using the provided subnet, parses the XML
+     output to extract host information, prints the results in JSON
+     format, and returns a list of the discovered hosts.
+
+    Args:
+        subnet (str): The target subnet to scan (in CIDR notation).
+
+    Returns:
+        list: A list of dictionaries, where each dictionary represents a
+            discovered host and contains information parsed from
+            the Nmap scan (e.g., MAC address, hostname, open ports).
+    """
     result = execute_nmap(subnet=subnet)
     hosts = parse_nmap_xml(result)
     print(json.dumps(hosts, indent=4))
@@ -1112,18 +1160,64 @@ def run_nmap_scan(subnet):
 
 
 def include_host(hosts):
+    """
+    Determine whether to include the local host in the scan results.
+
+    Identifies hosts in the provided list that have IP addresses
+    matching the local machine's IP addresses. If any local hosts are
+    found, it prompts the user whether to include them in the final
+    results.
+
+    Args:
+        hosts (list): A list of dictionaries, where each dictionary
+         represents a scanned host and contains an 'ip_addr' key.
+
+    Returns:
+        list: A filtered list of host dictionaries, potentially
+         excluding the local host based on user input.
+    """
     local_ips = get_local_ips()
     local_hosts = [host for host in hosts if host['ip_addr'] in local_ips]
 
     if local_hosts:
         print("Your device was detected in the scan.")
-        include_self = input("Include your own device in results? [y/N]: ").strip().lower()
+        include_self = input("Include your own device in results? "
+                             "[y/N]: ").strip().lower()
         if include_self != 'y' or 'Y':
-            hosts = [host for host in hosts if host['ip_addr'] not in local_ips]
+            hosts = [host for host in hosts
+                     if host['ip_addr'] not in local_ips]
     return hosts
 
 
 def upload(hosts, config, prefix):
+    """
+    Upload scanned devices to NetBox, allowing user selection.
+
+    This function guides the user through the process of uploading
+     scanned devices to a NetBox instance. It offers three modes:
+     skipping the upload, uploading all devices, or selecting devices
+     individually.  The function then orchestrates the creation of
+     necessary NetBox objects (manufacturers, device types, devices,
+     interfaces, and IP addresses) and updates device information.
+
+    Args:
+        hosts (list): A list of dictionaries, where each dictionary
+            represents a scanned host and contains relevant device
+            information (e.g., 'ip_addr', 'mac_addr', 'manufacturer').
+        config (dict):  A configuration object providing access
+         to NetBox settings, such as API endpoint and authentication
+         details. This object is used by helper functions
+         (e.g., `display_tenants`, `create_devices`).
+        prefix (str):  The network prefix (in CIDR notation, e.g., '24')
+         to use when assigning IP addresses to the uploaded devices.
+
+    Returns:
+        list: The (potentially modified) list of host dictionaries. Each
+            dictionary representing a successfully uploaded device will
+            be augmented with an 'id' key, containing the corresponding
+            NetBox device ID. Devices that were not uploaded, or for
+            which the upload failed, will not have this key.
+    """
     print("\nChoose how to upload scanned devices to NetBox:")
     print("0: Do not upload")
     print("1: Upload all devices")
@@ -1173,6 +1267,27 @@ def upload(hosts, config, prefix):
 
 
 def export(cli_output, all_hosts, uploaded_hosts):
+    """
+    Export scan results to a CSV file based on user preference.
+
+    Prompts the user to choose whether to export the scan results and,
+    if so, which set of hosts to export (all scanned or only uploaded).
+    It then handles the CSV file naming and calls a helper function to
+    perform the actual export.
+
+    Args:
+        cli_output (str, None): The filename provided via command-line
+            arguments for the output CSV file. If None, the user will be
+            prompted for a filename.
+        all_hosts (list): A list of dictionaries representing all hosts
+            discovered during the scan.
+        uploaded_hosts (list): A list of dictionaries representing the
+            hosts that were successfully uploaded to NetBox.
+
+    Returns:
+        None: This function does not return a value. It performs the
+        export operation or prints a message if no export is performed.
+    """
     print("\nDo you want to export scan results to CSV?")
     print("0: Do not export")
     print("1: Export all scanned devices")
@@ -1200,6 +1315,7 @@ def export(cli_output, all_hosts, uploaded_hosts):
             filename += '.csv'
         cli_output = filename
 
+    export_data = []
     if export_choice == '1':
         export_data = all_hosts
     elif export_choice == '2':
