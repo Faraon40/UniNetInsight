@@ -256,29 +256,6 @@ def validate_config():
     return config
 
 
-def validate_subnet(subnet):
-    """
-    Validate the provided IPv4 subnet.
-
-    This function checks if the given subnet is a valid IPv4 network.
-    It attempts to parse the subnet and verify its format. If the subnet
-    is invalid or missing a subnet mask (e.g., `/24`), an error message
-    is printed and the program is terminated with a non-zero exit code.
-
-    Args:
-        subnet (str): The subnet to be validated. This should be
-         a string in the format "IP_address/subnet_mask"
-         (e.g., "192.168.1.0/24").
-
-    """
-    try:
-        ipaddress.IPv4Network(subnet, strict=False)
-    except ValueError:
-        print(f"Error: The provided subnet '{subnet}' is invalid or missing"
-              f" a subnet mask (e.g., /24).", file=sys.stderr)
-        sys.exit(1)
-
-
 def execute_nmap(subnet):
     """
     Validate that the provided subnet string is a valid IPv4 network.
