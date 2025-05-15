@@ -409,6 +409,9 @@ def parse_nmap_xml(xml_data, default_vendor="Unspecified"):
             "id": None,
             "interface_id": None,
             "ip_addr_id": None,
+            "manufacturer_id": None,
+            "device_type_id": None,
+
             "ip_addr": ip,
             "mac_addr": mac,
             "manufacturer": vendor,
@@ -571,17 +574,6 @@ def display_device_roles(config):
     )
 
 
-def display_device_types(config):
-    """Display device types options."""
-    return display_options(
-        config,
-        api_endpoint="/api/dcim/device-types/",
-        name_field="display",
-        description_field="description",
-        label_name="Device Types"
-    )
-
-
 def display_sites(config):
     """Display sites options."""
     return display_options(
@@ -591,6 +583,170 @@ def display_sites(config):
         description_field="description",
         label_name="Sites"
     )
+
+
+def slugify(name):
+    """Create a NetBox-compatible slug from a manufacturer name."""
+    return (
+        name.lower()
+        .replace(" ", "-")
+        .replace("(", "-")
+        .replace(")", "-")
+        .replace(".", "-")
+        .replace("/", "-")
+        .replace("*", "-")
+    )
+
+
+def create_manufacturers(hosts, config):
+    """
+    Ensure all manufacturers from hosts exist in NetBox, and assign their IDs.
+
+    Args:
+        hosts (list of dict): Hosts with 'manufacturer' field.
+        config (dict): Must include 'base_url' and 'api_token'.
+
+    Returns:
+        list of dict: Hosts with 'manufacturer_id' field populated.
+    """
+    manufacturer_url = f"{config['base_url']}/api/dcim/manufacturers/"
+
+    manufacturers_data = get_from(manufacturer_url, config)
+    existing = manufacturers_data.get("results", [])
+
+    slug_to_id = {
+        m["slug"]: m["id"]
+        for m in existing
+        if m.get("slug") and m.get("id")
+    }
+
+    for host in hosts:
+        original_name = host.get("manufacturer", "").strip()
+        if not original_name:
+            host["manufacturer_id"] = None
+            continue
+
+        slug = slugify(original_name)
+
+        # If manufacturer already exists, assign its ID
+        if slug in slug_to_id:
+            host["manufacturer_id"] = slug_to_id[slug]
+            continue
+
+        # Otherwise, create it in NetBox
+        payload = {
+            "name": original_name,
+            "slug": slug
+        }
+
+        result = post_to(
+            url=manufacturer_url,
+            payload=payload,
+            config=config,
+            success_msg=f"New Manufacturer '{original_name}' added."
+        )
+
+        if result and "id" in result:
+            manufacturer_id = result["id"]
+            slug_to_id[slug] = manufacturer_id
+            host["manufacturer_id"] = manufacturer_id
+        else:
+            host["manufacturer_id"] = None  # Fallback in case creation failed
+
+    return hosts
+
+
+def create_device_types(hosts, config):
+    """
+    Ensure all device types from hosts exist in NetBox, and assign their IDs.
+
+    Each device type is created or fetched based on its model name
+    (usually same as manufacturer), tied to a manufacturer_id.
+
+    Args:
+        hosts (list of dict): Hosts with 'manufacturer', 'manufacturer_id'.
+        config (dict): API config.
+
+    Returns:
+        list of dict: Hosts with 'device_type_id' field added.
+    """
+    device_types_url = f"{config['base_url']}/api/dcim/device-types/"
+
+    device_types_data = get_from(url=device_types_url, config=config)
+    existing = device_types_data.get("results", [])
+
+    slug_to_id = {
+        dt["slug"]: dt["id"]
+        for dt in existing
+        if dt.get("slug") and dt.get("id")
+    }
+
+    for host in hosts:
+        manufacturer_id = host.get("manufacturer_id")
+        model_name = host.get("manufacturer", "Unspecified").strip()
+
+        if not manufacturer_id or not model_name:
+            host["device_type_id"] = None
+            continue
+
+        slug = slugify(model_name)
+
+        if slug in slug_to_id:
+            host["device_type_id"] = slug_to_id[slug]
+            continue
+
+        # Device type doesn't exist – create it
+        payload = {
+            "model": model_name,
+            "slug": slug,
+            "manufacturer": manufacturer_id,
+            "u_height": 1.0
+        }
+
+        result = post_to(
+            url=device_types_url,
+            payload=payload,
+            config=config,
+            success_msg=f"New Device Type '{model_name}' added."
+        )
+
+        if result and "id" in result:
+            device_type_id = result.get("id")
+            slug_to_id[slug] = device_type_id
+            host["device_type_id"] = device_type_id
+        else:
+            host["device_type_id"] = None  # Creation failed fallback
+
+    return hosts
+
+
+def assign_device(host, role, site, tenant, config, device_url):
+    """"""
+    name = host["hostname"] or host["mac_addr"]
+    payload = {
+        "name": name,
+        "role": role["id"],
+        "device_type": host["device_type_id"],
+        "site": site["id"],
+        "status": host["status"]
+    }
+    if tenant is not None:
+        payload["tenant"] = tenant["id"]
+
+    result = post_to(
+        url=device_url,
+        payload=payload,
+        config=config,
+        success_msg=f"Device '{name}' added "
+                    f"(MAC: {host['mac_addr']}) "
+                    f"(Manufacturer: {host['manufacturer']}).",
+        failure_msg=f"Failed to add device '{name}' "
+                    f"(MAC: {host['mac_addr']}) "
+                    f"(Manufacturer: {host['manufacturer']})."
+    )
+
+    if result:
+        host["id"] = result.get("id")
 
 
 def create_devices(hosts, tenant, site, config):
@@ -917,57 +1073,6 @@ def update_devices(hosts, config):
         except requests.exceptions.RequestException as e:
             print(f"An error occurred: {e}")
             break
-
-
-def create_manufacturers(hosts, config):
-    """
-    Create new manufacturers in NetBox that don't already have an entry.
-
-    This function extracts unique manufacturers from the list of hosts
-    and checks if they already exist in the NetBox database. If a
-    manufacturer doesn't exist, it creates a new manufacturer entry in
-    the NetBox system.
-
-    Args:
-        hosts (list of dict): A list of host dictionaries, each
-         containing a 'manufacturer' key representing the device's
-         manufacturer name.
-        config (dict): Configuration dictionary with:
-            - 'base_url' (str): The base URL of the NetBox API.
-            - 'api_token' (str): Token used for authentication.
-
-    """
-    manufacturer_url = f"{config['base_url']}/api/dcim/manufacturers/"
-    new_manufacturers = set(host["manufacturer"] for host in hosts)
-    manufacturers_data = get_from(
-        f"{config['base_url']}/api/dcim/manufacturers/", config
-    )
-    existing_manufacturers = {
-        manufacturer["name"].lower() for manufacturer in
-                              manufacturers_data.get("results", [])
-    }
-
-    for manufacturer in new_manufacturers:
-        if manufacturer.lower() in existing_manufacturers:
-            continue
-        manufacturer = manufacturer.lower()
-        manufacturer = manufacturer.replace(" ", "-")
-        manufacturer = manufacturer.replace("(", "-")
-        manufacturer = manufacturer.replace(")", "-")
-        manufacturer = manufacturer.replace(".", "-")
-        manufacturer = manufacturer.replace("/", "-")
-
-        payload = {
-            "name": manufacturer,
-            "slug": manufacturer
-        }
-
-        post_to(
-            url=manufacturer_url,
-            payload=payload,
-            config=config,
-            success_msg=f"New Manufacturer {manufacturer} added."
-        )
 
 
 def export_hosts_to_csv(hosts, filename, include_ids=False):
