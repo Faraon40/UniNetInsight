@@ -879,7 +879,7 @@ def create_devices(hosts, tenant, site, config):
             assign_device(host, role, site, tenant, config, device_url)
     else:
         for host in hosts:
-            print(f"Assigning role/type for device: "
+            print(f"\nAssigning role/type for device: "
                   f"{host['ip_addr']} | "
                   f"MAC: {host['mac_addr']} | "
                   f"Manufacturer: {host['manufacturer']}")
