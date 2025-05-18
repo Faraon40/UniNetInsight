@@ -14,7 +14,7 @@ Module Usage:
      with the API and parsing Nmap XML output.
 """
 
-__author__ = "Antonio Kis"
+__author__ = "Antonio Kis, Samuel Michalcik, Marek Strba, Marcel Sotak"
 
 import csv
 import json
@@ -314,6 +314,44 @@ def get_hostname(ip):
         return None
 
 
+def lookup_mac_vendor(mac_address, default_vendor):
+    """
+    Retrieve the vendor name associated with a MAC address.
+
+    This function checks a local cache for the given MAC address.
+    If not found, it sends a request to macvendors.com to resolve
+    the MAC address to its vendor. If the request fails
+    or returns a non-200 status code, the provided default
+    vendor is returned instead.
+
+    Parameters:
+        mac_address (str): The MAC address to look up
+         (e.g., '44:38:39:ff:ef:57').
+        default_vendor (str): The fallback vendor name to return
+         if the lookup fails.
+
+    Returns:
+        str: The resolved vendor name if successful; otherwise,
+         the default vendor name.
+    """
+    mac_vendor_cache = {}
+    if mac_address in mac_vendor_cache:
+        return mac_vendor_cache[mac_address]
+
+    try:
+        url = f"https://api.macvendors.com/{mac_address}"
+        response = requests.get(url, timeout=15)
+        if response.status_code == 200:
+            vendor = response.text.strip()
+            mac_vendor_cache[mac_address] = vendor
+            return vendor
+    except requests.RequestException:
+        pass
+
+    mac_vendor_cache[mac_address] = default_vendor
+    return default_vendor
+
+
 def parse_nmap_xml(xml_data, default_vendor="Unspecified"):
     """
     Parse Nmap XML scan output and extract host information.
@@ -324,8 +362,8 @@ def parse_nmap_xml(xml_data, default_vendor="Unspecified"):
 
     Args:
         xml_data (CompletedProcess): The result object from
-        `subprocess.run()` or similar, which contains the Nmap XML
-         output in `xml_data.stdout`.
+        subprocess.run() or similar, which contains the Nmap XML
+         output in xml_data.stdout.
         default_vendor (str, optional): Default manufacturer name to use
          if none is provided in the MAC address entry.
         Defaults to "Unspecified".
@@ -347,7 +385,7 @@ def parse_nmap_xml(xml_data, default_vendor="Unspecified"):
     Notes:
         - Only IPv4 and MAC addresses are parsed.
         - Hostname resolution is disabled by default; can be enabled
-           with `get_hostname(ip)`.
+           with get_hostname(ip).
         - Hosts without an IP address are skipped from meaningful
            reporting.
     """
@@ -358,7 +396,7 @@ def parse_nmap_xml(xml_data, default_vendor="Unspecified"):
         status = host.find("status").attrib.get("state", "unknown")
         ip = ""
         mac = ""
-        vendor = default_vendor
+        raw_vendor = None
         hostname = ""
 
         for addr in host.findall("address"):
@@ -367,20 +405,26 @@ def parse_nmap_xml(xml_data, default_vendor="Unspecified"):
                 hostname = get_hostname(ip)
             elif addr.attrib["addrtype"] == "mac":
                 mac = addr.attrib["addr"]
-                vendor = addr.attrib.get("vendor", default_vendor)
+                raw_vendor = addr.attrib.get("vendor")
+
+        if raw_vendor and raw_vendor.strip().lower() != "unspecified":
+            vendor = raw_vendor
+        elif mac:
+            vendor = lookup_mac_vendor(mac, default_vendor)
+        else:
+            vendor = default_vendor
 
         hosts.append({
-            "id": None,
-            "interface_id": None,
-            "ip_addr_id": None,
-            "manufacturer_id": None,
-            "device_type_id": None,
-
-            "ip_addr": ip,
-            "mac_addr": mac,
-            "manufacturer": vendor,
-            "status": "active" if status == "up" else "offline",
-            "hostname": hostname,
+                "id": None,
+                "interface_id": None,
+                "ip_addr_id": None,
+                "manufacturer_id": None,
+                "device_type_id": None,
+                "ip_addr": ip,
+                "mac_addr": mac,
+                "manufacturer": vendor,
+                "status": "active" if status == "up" else "offline",
+                "hostname": hostname,
         })
 
     return hosts
