@@ -18,6 +18,7 @@ __author__ = "Antonio Kis, Samuel Michalcik, Marek Strba, Marcel Sotak"
 
 import csv
 import json
+import re
 import shutil
 from datetime import datetime
 import requests
@@ -595,27 +596,23 @@ def display_sites(config):
 
 def slugify(name):
     """
-    Generate a NetBox-compatible slug from a manufacturer name.
+    Generate a NetBox-compatible slug from a name.
 
-    Convert the given name to lowercase, replace spaces and special
-     characters (parentheses, periods, forward slashes, asterisks)
-     with hyphens.
+    Converts the input string to lowercase, replaces all
+    non-alphanumeric characters (except hyphens) with hyphens, collapses
+    consecutive hyphens, and strips leading/trailing hyphens.
 
     Args:
-        name (str): The manufacturer name to slugify.
+        name (str): The input string to slugify.
 
     Returns:
-        str: The generated slug.
+        str: The cleaned, NetBox-compatible slug.
     """
-    return (
-        name.lower()
-        .replace(" ", "-")
-        .replace("(", "-")
-        .replace(")", "-")
-        .replace(".", "-")
-        .replace("/", "-")
-        .replace("*", "-")
-    )
+    slug = name.lower()
+    slug = re.sub(r'[^a-z0-9-]+', '-', slug)
+    slug = re.sub(r'-{2,}', '-', slug)
+    slug = slug.strip('-')
+    return slug
 
 
 def create_manufacturers(hosts, config):
